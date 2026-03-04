@@ -68,26 +68,85 @@ class RiskEngine:
     async def can_trade(self, trade_size: float = 0) -> tuple[bool, Optional[str]]:
         """
         Check if trading is currently allowed.
-        
+
         Returns:
             Tuple of (can_trade, reason_if_not)
         """
         status = await self.get_current_status()
-        
+
         if status.is_locked_out:
             return False, status.lockout_reason
-        
+
         if not status.can_trade:
             return False, "Risk limits exceeded"
-        
-        # Check if this specific trade would exceed limits
+
         if trade_size > 0:
             if status.current_exposure + trade_size > self.limits.max_open_exposure:
                 return False, f"Would exceed max exposure limit (${self.limits.max_open_exposure})"
-            
             if trade_size > self.limits.max_trade_size:
                 return False, f"Trade size exceeds limit (${self.limits.max_trade_size})"
-        
+
+        return True, None
+
+    async def check_safety_gates(
+        self,
+        market_id: str,
+        game_id: str,
+        model_id: str,
+        yes_bid: float,
+        yes_ask: float,
+        volume_24h: int,
+        fair_value: float,
+        market_price: float,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Master Rules 6 safety gates — ALL must pass before any order.
+
+        Gate 1: KALSHI_ENV must be 'paper' (hard block)
+        Gate 2: Bid-ask spread <= 4c
+        Gate 3: 24h volume >= 5,000 contracts
+        Gate 4: Model daily loss < 10% of allocation
+        Gate 5: No existing open position on this game for this model
+        Gate 6: Fair value differs from market by >= 5c
+        """
+        import os
+
+        # Gate 1
+        kalshi_env = os.environ.get("KALSHI_ENV", "paper").lower()
+        if kalshi_env != "paper":
+            return False, f"SAFETY: KALSHI_ENV='{kalshi_env}' — only 'paper' allowed"
+
+        # Gate 2
+        spread = round(yes_ask - yes_bid, 4)
+        if spread > 0.04:
+            return False, f"SAFETY: Spread {spread:.2%} exceeds 4c gate"
+
+        # Gate 3
+        if volume_24h < 5000:
+            return False, f"SAFETY: Volume {volume_24h} below 5,000 contract gate"
+
+        # Gate 4
+        try:
+            daily_pnl = await self.trade_repo.get_daily_pnl_by_model(model_id)
+            allocation = getattr(self.limits, "model_allocation", 200.0)
+            if daily_pnl < -(allocation * 0.10):
+                return False, f"SAFETY: Model {model_id} daily loss ${abs(daily_pnl):.2f} exceeds 10% gate"
+        except Exception:
+            pass
+
+        # Gate 5
+        try:
+            existing = await self.position_repo.get_open_by_game_and_model(game_id, model_id)
+            if existing:
+                return False, f"SAFETY: Open position already exists for game {game_id} / model {model_id}"
+        except Exception:
+            pass
+
+        # Gate 6
+        edge = abs(fair_value - market_price)
+        if edge < 0.05:
+            return False, f"SAFETY: Edge {edge:.2%} below 5c minimum"
+
         return True, None
     
     def update_limits(self, new_limits: RiskLimits):

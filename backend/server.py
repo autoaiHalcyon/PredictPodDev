@@ -367,10 +367,18 @@ async def lifespan(app: FastAPI):
     try:
         from services.autonomous_scheduler import AutonomousScheduler
         from services.autonomous_metrics import AutonomousMetricsService
+        from services.kalshi_ingestor_v2 import KalshiBasketballIngestorV2
         autonomous_metrics_service = AutonomousMetricsService(db)
+        # Bug #2 fix: pass live ingestor so discovery loop fetches real Kalshi markets
+        _kalshi_ingestor = KalshiBasketballIngestorV2(db=db)
+        try:
+            await _kalshi_ingestor.connect()
+        except Exception as _ie:
+            logger.warning(f'Kalshi ingestor connect warning (will retry): {_ie}')
         autonomous_scheduler_instance = AutonomousScheduler(
             db=db,
-            strategy_manager=strategy_manager
+            strategy_manager=strategy_manager,
+            kalshi_ingestor=_kalshi_ingestor,
         )
         await autonomous_scheduler_instance.start()
         strategy_manager.enable()

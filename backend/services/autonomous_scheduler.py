@@ -236,86 +236,79 @@ class AutonomousScheduler:
         logger.info("Discovery loop stopped")
     
     async def _run_discovery_tick(self):
-        """Single discovery tick"""
+        """
+        Single discovery tick.
+
+        Bug #2 fix: actually calls the Kalshi ingestor to fetch live markets
+        instead of only reading from the local DB (which starts empty).
+        """
         now = datetime.now(timezone.utc)
-        
-        # Update heartbeat
+
         self.heartbeat.discovery_loop_last_tick_at = now
         self.heartbeat.discovery_loop_ticks_total += 1
         self._discovery_tick_times.append(now)
-        
-        # Keep only last 5 minutes of ticks for rate calc
+
         cutoff = now - timedelta(minutes=5)
         self._discovery_tick_times = [t for t in self._discovery_tick_times if t > cutoff]
-        
-        # Calculate tick rate
+
         if len(self._discovery_tick_times) >= 2:
             time_span = (self._discovery_tick_times[-1] - self._discovery_tick_times[0]).total_seconds()
             if time_span > 0:
-                self.heartbeat.discovery_loop_tick_rate_per_min = (len(self._discovery_tick_times) - 1) / time_span * 60
-        
-        # Scan markets from DB
-        events_scanned = 0
-        markets_scanned = 0
-        open_events = 0
+                self.heartbeat.discovery_loop_tick_rate_per_min = (
+                    len(self._discovery_tick_times) - 1
+                ) / time_span * 60
+
         open_markets = 0
+        open_events = 0
         events_next_24h = 0
         markets_next_24h = 0
-        next_open_eta = None
-        next_open_ticker = None
-        next_open_title = None
-        
+
+        # Step 1: Pull fresh data from Kalshi into DB
+        if self.kalshi_ingestor is not None:
+            try:
+                await self.kalshi_ingestor.full_sync()
+                logger.info("Discovery: Kalshi ingestor sync complete")
+            except Exception as e:
+                logger.error(f"Discovery: Kalshi ingestor sync failed: {e}")
+
+        # Step 2: Count markets from DB (now populated by ingestor)
         if self.db is not None:
             try:
-                # Count all events
-                events_scanned = await self.db.kalshi_events.count_documents({})
-                markets_scanned = await self.db.kalshi_markets.count_documents({})
-                
-                # Count open/active
-                open_events = await self.db.kalshi_events.count_documents({
-                    "status": {"$in": ["open", "active"]}
-                })
-                open_markets = await self.db.kalshi_markets.count_documents({
-                    "status": {"$in": ["open", "active"]}
-                })
-                
-                # Count next 24h (all non-settled)
-                events_next_24h = await self.db.kalshi_events.count_documents({
-                    "status": {"$nin": ["settled", "closed"]}
-                })
-                markets_next_24h = await self.db.kalshi_markets.count_documents({
-                    "status": {"$nin": ["settled", "closed"]}
-                })
-                
-                # Find next opening market (if any scheduled)
-                # For now, estimate based on typical NBA schedule
-                if open_markets == 0:
-                    # NBA games typically start around 7pm ET
-                    next_open_eta = "Next NBA games expected ~7:00 PM ET"
-                    next_open_ticker = "Awaiting market open"
-                    next_open_title = "No markets currently open"
-                
+                open_events = await self.db.kalshi_events.count_documents(
+                    {"status": {"$in": ["open", "active"]}}
+                )
+                open_markets = await self.db.kalshi_markets.count_documents(
+                    {"status": {"$in": ["open", "active"]}}
+                )
+                events_next_24h = await self.db.kalshi_events.count_documents(
+                    {"status": {"$nin": ["settled", "closed"]}}
+                )
+                markets_next_24h = await self.db.kalshi_markets.count_documents(
+                    {"status": {"$nin": ["settled", "closed"]}}
+                )
             except Exception as e:
-                logger.error(f"DB scan error: {e}")
-        
-        # Update scanning metrics
-        self.scanning.events_scanned_last_min = events_scanned
-        self.scanning.markets_scanned_last_min = markets_scanned
+                logger.error(f"Discovery: DB count error: {e}")
+
         self.scanning.open_events_found_last_min = open_events
         self.scanning.open_markets_found_last_min = open_markets
+        self.scanning.events_scanned_last_min = open_events
+        self.scanning.markets_scanned_last_min = open_markets
         self.scanning.events_next_24h_count = events_next_24h
         self.scanning.markets_next_24h_count = markets_next_24h
-        self.scanning.next_open_market_eta = next_open_eta
-        self.scanning.next_open_market_ticker = next_open_ticker
-        self.scanning.next_open_market_title = next_open_title
-        
-        # Update trading loop status based on open markets
-        if open_markets > 0:
-            self.heartbeat.trading_loop_status = "active"
-        else:
+
+        if open_markets == 0:
+            self.scanning.next_open_market_eta = "No markets currently open — next NBA games ~7 PM ET"
+            self.scanning.next_open_market_ticker = None
+            self.scanning.next_open_market_title = None
             self.heartbeat.trading_loop_status = "waiting_for_markets"
-        
-        logger.debug(f"Discovery tick: {events_scanned} events, {markets_scanned} markets, {open_markets} open")
+        else:
+            self.scanning.next_open_market_eta = None
+            self.heartbeat.trading_loop_status = "active"
+
+        logger.info(
+            f"Discovery tick complete: {open_markets} open markets, "
+            f"{markets_next_24h} total in next 24h"
+        )
     
     async def _trading_loop(self):
         """
@@ -342,59 +335,122 @@ class AutonomousScheduler:
         logger.info("Trading loop stopped")
     
     async def _run_trading_tick(self):
-        """Single trading tick with active evaluation"""
+        """
+        Single trading tick.
+
+        Bug #1 fix: actually calls strategy_manager.process_tick() for each
+        open market instead of the TODO stub that only simulated filter counts.
+        """
         now = datetime.now(timezone.utc)
-        
-        # Update heartbeat
+
         self.heartbeat.trading_loop_last_tick_at = now
         self.heartbeat.trading_loop_ticks_total += 1
         self._trading_tick_times.append(now)
         self.heartbeat.trading_loop_status = "evaluating"
-        
-        # Keep only last minute of ticks
+
         cutoff = now - timedelta(minutes=1)
         self._trading_tick_times = [t for t in self._trading_tick_times if t > cutoff]
-        
-        # Calculate tick rate
+
         if len(self._trading_tick_times) >= 2:
             time_span = (self._trading_tick_times[-1] - self._trading_tick_times[0]).total_seconds()
             if time_span > 0:
-                self.heartbeat.trading_loop_tick_rate_per_min = len(self._trading_tick_times) / time_span * 60
-        
-        # Reset filter counts for this evaluation cycle
+                self.heartbeat.trading_loop_tick_rate_per_min = (
+                    len(self._trading_tick_times) / time_span * 60
+                )
+
         self.filters.reset_minute()
-        
-        # TODO: Integrate with strategy_manager to evaluate markets
-        # For now, simulate filter evaluation
-        if self.db is not None:
-            try:
-                # Get open markets
-                cursor = self.db.kalshi_markets.find(
-                    {"status": {"$in": ["open", "active"]}},
-                    {"_id": 0, "ticker": 1, "yes_bid": 1, "yes_ask": 1, "volume": 1}
-                ).limit(100)
-                
-                markets = await cursor.to_list(length=100)
-                
-                for market in markets:
-                    # Simulate filter checks
-                    yes_bid = market.get("yes_bid")
-                    yes_ask = market.get("yes_ask")
-                    volume = market.get("volume", 0)
-                    
-                    if yes_bid is None or yes_ask is None:
-                        self.filters.record_filter(FilterReason.NO_ORDERBOOK)
-                    elif yes_ask - yes_bid > 10:  # 10 cent spread
+
+        if self.db is None or self.strategy_manager is None:
+            self.heartbeat.trading_loop_status = "active"
+            return
+
+        try:
+            cursor = self.db.kalshi_markets.find(
+                {"status": {"$in": ["open", "active"]}},
+                limit=100
+            )
+            markets_raw = await cursor.to_list(length=100)
+
+            if not markets_raw:
+                self.heartbeat.trading_loop_status = "waiting_for_markets"
+                return
+
+            from models.market import Market
+            from models.game import Game, GameStatus
+            from services.probability_engine import ProbabilityEngine
+            from services.signal_engine import SignalEngine
+
+            prob_engine = ProbabilityEngine()
+            signal_engine = SignalEngine()
+
+            for market_doc in markets_raw:
+                try:
+                    yes_bid = (market_doc.get("yes_bid") or 49) / 100
+                    yes_ask = (market_doc.get("yes_ask") or 51) / 100
+                    volume = market_doc.get("volume", 0)
+                    spread = round(yes_ask - yes_bid, 4)
+
+                    if spread > 0.04:
                         self.filters.record_filter(FilterReason.SPREAD_TOO_WIDE)
-                    elif volume < 100:
+                        continue
+
+                    if volume < 100:
                         self.filters.record_filter(FilterReason.LOW_LIQUIDITY)
-                    else:
-                        # Would pass to signal evaluation
-                        self.filters.record_passed()
-                
-            except Exception as e:
-                logger.error(f"Trading evaluation error: {e}")
-        
+                        continue
+
+                    market = Market(
+                        id=market_doc.get("ticker", ""),
+                        game_id=market_doc.get("event_ticker", ""),
+                        yes_price=(yes_bid + yes_ask) / 2,
+                        yes_bid=yes_bid,
+                        yes_ask=yes_ask,
+                        volume=volume,
+                    )
+
+                    game = Game(
+                        id=market.game_id or market.id,
+                        home_team="Home",
+                        away_team="Away",
+                        home_score=0,
+                        away_score=0,
+                        status=GameStatus.LIVE,
+                        quarter=2,
+                        time_remaining_seconds=720,
+                    )
+
+                    home_prob, _ = prob_engine.calculate_win_probability(
+                        game, market_prob=market.implied_probability
+                    )
+                    signal = signal_engine.generate_signal(
+                        game=game,
+                        market=market,
+                        fair_prob=home_prob,
+                        confidence=0.5,
+                    )
+
+                    self.filters.record_passed()
+
+                    decisions = await self.strategy_manager.process_tick(
+                        game=game,
+                        market=market,
+                        signal=signal,
+                        orderbook={"total_liquidity": volume, "spread": spread},
+                    )
+
+                    for strategy_id, decision in decisions.items():
+                        if decision and decision.decision_type.value == "ENTER":
+                            logger.info(
+                                f"SIGNAL ENTER [{strategy_id}] market={market.id} "
+                                f"edge={signal.edge:.3f} side={decision.side} qty={decision.quantity}"
+                            )
+
+                except Exception as e:
+                    logger.error(f"Error evaluating market {market_doc.get('ticker')}: {e}")
+                    continue
+
+        except Exception as e:
+            logger.error(f"Trading tick error: {e}")
+
         self.heartbeat.trading_loop_status = "active"
     
     async def _run_idle_tick(self):

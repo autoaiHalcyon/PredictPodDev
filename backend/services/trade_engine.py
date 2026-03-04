@@ -64,10 +64,19 @@ class TradeEngine:
             quantity=quantity,
             price=price
         )
-        
+
         if not risk_check:
             logger.warning(f"Trade rejected by risk check: {risk_error}")
             return None, risk_error
+
+        # Bug #6 fix — position deduplication
+        # One open position per market per model, full stop.
+        if direction == "buy":
+            existing_position = await self.position_repo.get_by_market_id(market_id)
+            if existing_position and existing_position.is_open:
+                msg = f"Dedup block: open position already exists for market {market_id}"
+                logger.warning(msg)
+                return None, msg
         
         try:
             # Execute trade via Kalshi adapter

@@ -1,0 +1,117 @@
+{
+  "summary": "Iteration 8 - All 5 critical issues verified and working. 1) Game Detail navigation from Terminal works via Trade buttons. 2) Trades Center KPIs (Total Paper P/L, Total Live P/L, Open Paper Trades, Open Live Trades) all displaying correctly. 3) Portfolio page shows 'Trading Summary (Paper + Live)' table with PAPER, LIVE, and COMBINED rows. 4) Probability Charts render with data on Game Detail page (Market vs Fair, Edge, Volatility tabs). 5) Market Intelligence panel shows (5-min Trend, 30-min Trend, Volatility, Momentum). Manual trade flow tested - trade executed and visible in API.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard and TradesCenter",
+        "issues": ["Minor hydration warning: <tr> cannot be a child of <span> - caused by React rendering wrapper in tables. Does not affect functionality."]
+      },
+      {
+        "screen": "Charts",
+        "issues": ["Console warning about chart width/height being -1 during initial render. Charts still render correctly after data loads."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_8.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GameDetail.jsx - loadGame() correctly handles both ESPN game IDs (nba_XXXXXXXX) and Kalshi market tickers",
+    "GameDetail.jsx - handleTrade() calls addTrade from Zustand store to sync trades globally (Issue 5 fix verified)",
+    "TradesCenter.js - KPI cards using pnlSummary from useTrades hook - all 4 KPIs display correctly",
+    "Portfolio.jsx - Paper+Live summary table with getPaperSummary(), getLiveSummary() - PAPER, LIVE, COMBINED rows all present",
+    "ProbabilityChart.jsx - Shows placeholder 'No probability data available' when no data, renders chart when data exists",
+    "IntelligencePanel.jsx - Shows placeholder 'Collecting market data...' when no intelligence, displays indicators when data present"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (API endpoints verified: /api/games/nba_401838141, /api/trades, /api/orders, /api/portfolio)",
+    "frontend": "100% (All 5 features verified via Playwright)"
+  },
+  "test_credentials": "None required - paper trading mode",
+  "seed_data_creation": "Manual trade created during testing: game nba_401838141, 10 contracts, YES side, filled status",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 5 critical issues verified working: 1) Terminal page has Trade buttons that navigate to /game/{gameId}. 2) Trades Center at /trades shows 4 KPI cards with data-testid attributes. 3) Portfolio at /portfolio shows 'Trading Summary (Paper + Live)' table with PAPER/LIVE/COMBINED rows. 4) Game Detail page renders Probability Charts with Market vs Fair/Edge/Volatility tabs. 5) Manual trades executed from Game Detail appear in API immediately. Note: All Games page (/all-games) is for Kalshi markets only, shows 'No Markets Found' when filtered to Open status with no open markets available.",
+  "features_verified": {
+    "issue_1_game_detail_navigation": {
+      "status": "VERIFIED",
+      "test_url": "/game/nba_401838141",
+      "navigation_source": "Terminal page Trade buttons",
+      "game_loads": true,
+      "game_header": "Team Stars @ Team Stripes"
+    },
+    "issue_2_trades_center_kpis": {
+      "status": "VERIFIED",
+      "test_url": "/trades",
+      "kpi_cards": {
+        "total_paper_pnl": {"visible": true, "data_testid": "kpi-total-paper-p/l", "value": "+$0.00"},
+        "total_live_pnl": {"visible": true, "data_testid": "kpi-total-live-p/l", "value": "+$0.00"},
+        "open_paper_trades": {"visible": true, "data_testid": "kpi-open-paper-trades", "value": "0"},
+        "open_live_trades": {"visible": true, "data_testid": "kpi-open-live-trades", "value": "0"}
+      },
+      "trades_displayed": 98
+    },
+    "issue_3_portfolio_paper_live_summary": {
+      "status": "VERIFIED",
+      "test_url": "/portfolio",
+      "data_testid": "paper-live-summary",
+      "title": "Trading Summary (Paper + Live)",
+      "table_headers": ["Mode", "Balance", "Portfolio Value", "Exposure", "Total P/L", "Open Positions", "Total Trades"],
+      "rows": {
+        "PAPER": {"balance": "$10,000.00", "value": "$10,000.00", "total_trades": 98},
+        "LIVE": {"balance": "$0.00", "value": "$0.00", "total_trades": 0},
+        "COMBINED": {"balance": "$10,000.00", "value": "$10,000.00", "total_trades": 98}
+      }
+    },
+    "issue_4_probability_charts": {
+      "status": "VERIFIED",
+      "section_title": "Probability Charts",
+      "tabs": ["Market vs Fair", "Edge", "Volatility"],
+      "timeframe_buttons": ["5m", "15m", "Full"],
+      "chart_renders_with_data": true,
+      "probability_history_count": 500
+    },
+    "issue_4_market_intelligence": {
+      "status": "VERIFIED",
+      "section_title": "Market Intelligence",
+      "indicators": {
+        "5min_trend": "Neutral",
+        "30min_trend": "Neutral",
+        "volatility": "LOW",
+        "momentum": "Neutral"
+      }
+    },
+    "issue_5_manual_trade_sync": {
+      "status": "VERIFIED",
+      "trade_panel_present": true,
+      "paper_trading_badge": true,
+      "manual_trade_form": {
+        "side_dropdown": true,
+        "direction_dropdown": true,
+        "quantity_input": true,
+        "place_trade_button": true
+      },
+      "trade_confirmation_dialog": true,
+      "trade_executed": true,
+      "trade_visible_in_api": true,
+      "new_trade_id": "63142023...",
+      "your_positions_updated": "YES - 10 contracts, Entry: 96.0%"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "KalshiAdapter mode: MOCKED (Paper Trading)",
+      "MockKalshiAdapter for market prices"
+    ],
+    "real_data": "ESPN game data and Kalshi category data are real"
+  }
+}

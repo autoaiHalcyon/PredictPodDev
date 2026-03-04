@@ -1,0 +1,101 @@
+{
+  "started_at": "2026-02-12T19:02:21.222443",
+  "tests": [
+    {
+      "test": "kill_switch_activation",
+      "passed": true,
+      "details": "Kill switch activated and verified",
+      "timestamp": "2026-02-12T19:02:21.304105"
+    },
+    {
+      "test": "kill_switch_deactivation",
+      "passed": true,
+      "details": "Kill switch deactivated",
+      "timestamp": "2026-02-12T19:02:21.330734"
+    },
+    {
+      "test": "idempotency_stress",
+      "passed": true,
+      "details": "Iterations=20, Blocked=19, Duplicates=0",
+      "timestamp": "2026-02-12T19:02:21.462905"
+    },
+    {
+      "test": "rate_limit_behavior",
+      "passed": true,
+      "details": "Accepted=4/10, Rate hits=0",
+      "timestamp": "2026-02-12T19:02:21.724595"
+    },
+    {
+      "test": "aggressive_mode_blocked",
+      "passed": true,
+      "details": "AGGRESSIVE without confirmation: blocked=True",
+      "timestamp": "2026-02-12T19:02:21.743468"
+    },
+    {
+      "test": "aggressive_mode_with_confirmation",
+      "passed": true,
+      "details": "AGGRESSIVE with confirmation: success=True",
+      "timestamp": "2026-02-12T19:02:21.754040"
+    },
+    {
+      "test": "reset_to_conservative",
+      "passed": true,
+      "details": "Reset to CONSERVATIVE mode",
+      "timestamp": "2026-02-12T19:02:21.805826"
+    },
+    {
+      "test": "order_lifecycle_submit",
+      "passed": false,
+      "details": "Submit failed: ",
+      "timestamp": "2026-02-12T19:02:21.858008"
+    },
+    {
+      "test": "reconciliation",
+      "passed": true,
+      "details": "Unreconciled=0, Critical=0",
+      "timestamp": "2026-02-12T19:02:21.868799"
+    },
+    {
+      "test": "stuck_orders",
+      "passed": true,
+      "details": "Working orders=5, Stuck (>60s)=0",
+      "timestamp": "2026-02-12T19:02:21.879179"
+    },
+    {
+      "test": "audit_log_integrity",
+      "passed": true,
+      "details": "Entries=50, Sensitive data=False",
+      "timestamp": "2026-02-12T19:02:21.890208"
+    }
+  ],
+  "metrics": {
+    "orders_submitted": 5,
+    "orders_filled": 0,
+    "orders_rejected": 0,
+    "duplicate_attempts": 0,
+    "duplicates_blocked": 19,
+    "reconciliation_runs": 1,
+    "reconciliation_mismatches": 0,
+    "kill_switch_activations": 1,
+    "rate_limit_hits": 0,
+    "errors": []
+  },
+  "resource_snapshots": [],
+  "log_snapshots": [],
+  "pass_fail": {
+    "total": 11,
+    "passed": 10,
+    "failed": 1,
+    "pass_rate": 90.9090909090909
+  },
+  "completed_at": "2026-02-12T19:02:21.890266",
+  "release_gate_criteria": {
+    "zero_duplicate_orders": true,
+    "zero_unreconciled_mismatches": true,
+    "kill_switch_works": true,
+    "no_stuck_orders": true,
+    "no_memory_leak": true,
+    "audit_log_clean": true
+  },
+  "release_gate_passed": true
+}

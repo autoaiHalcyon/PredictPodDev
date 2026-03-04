@@ -1,0 +1,9 @@
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "timestamp": "2026-02-12T22:37:00.897721+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "timestamp": "2026-02-12T22:54:58.408640+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "scheduler": "2-loop (discovery + trading)", "timestamp": "2026-02-12T23:12:31.340205+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "scheduler": "2-loop (discovery + trading)", "timestamp": "2026-02-12T23:14:02.171648+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "scheduler": "2-loop (discovery + trading)", "timestamp": "2026-02-12T23:15:03.539236+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "scheduler": "2-loop (discovery + trading)", "timestamp": "2026-02-12T23:16:58.434146+00:00"}
+{"event_type": "AUTONOMOUS_MODE_DISABLED", "timestamp": "2026-02-12T23:16:58.571444+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "scheduler": "2-loop (discovery + trading)", "timestamp": "2026-02-12T23:17:45.426329+00:00"}
+{"event_type": "AUTONOMOUS_MODE_ENABLED", "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"], "mode": "AUTO", "scheduler": "2-loop (discovery + trading)", "hourly_snapshots": "enabled", "timestamp": "2026-02-12T23:24:41.445906+00:00"}

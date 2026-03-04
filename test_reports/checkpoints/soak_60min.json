@@ -1,0 +1,35 @@
+{
+  "label": "soak_60min",
+  "timestamp": "2026-02-12T20:02:42.928210",
+  "metrics": {
+    "cpu_percent": 8.8,
+    "memory_mb": 37.41,
+    "memory_percent": 0.23,
+    "orders": {
+      "total": 77,
+      "by_state": {
+        "submitted": 0,
+        "acknowledged": 2,
+        "partial": 0,
+        "filled": 48,
+        "rejected": 5,
+        "cancelled": 0,
+        "expired": 22
+      }
+    },
+    "reconciliation": {
+      "total_unreconciled": 554,
+      "critical_mismatches": 0,
+      "warning_mismatches": 554
+    },
+    "sandbox": {
+      "balance": 9992.5,
+      "positions_count": 8,
+      "working_orders_count": 2
+    },
+    "stuck_orders_count": 2,
+    "kill_switch_active": false,
+    "rate_limit_hits": 129,
+    "server_errors_5xx": 4
+  }
+}

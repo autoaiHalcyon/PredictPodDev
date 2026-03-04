@@ -1,0 +1,135 @@
+{
+  "started_at": "2026-02-12T22:21:52.403530",
+  "mode": "auto_apply_paper",
+  "models": {
+    "model_a_disciplined": {
+      "NBA": {
+        "model_id": "model_a_disciplined",
+        "league": "NBA",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "NCAA_M": {
+        "model_id": "model_a_disciplined",
+        "league": "NCAA_M",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "NCAA_W": {
+        "model_id": "model_a_disciplined",
+        "league": "NCAA_W",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "GENERIC": {
+        "model_id": "model_a_disciplined",
+        "league": "GENERIC",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      }
+    },
+    "model_b_high_frequency": {
+      "NBA": {
+        "model_id": "model_b_high_frequency",
+        "league": "NBA",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "NCAA_M": {
+        "model_id": "model_b_high_frequency",
+        "league": "NCAA_M",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "NCAA_W": {
+        "model_id": "model_b_high_frequency",
+        "league": "NCAA_W",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "GENERIC": {
+        "model_id": "model_b_high_frequency",
+        "league": "GENERIC",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      }
+    },
+    "model_c_institutional": {
+      "NBA": {
+        "model_id": "model_c_institutional",
+        "league": "NBA",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "NCAA_M": {
+        "model_id": "model_c_institutional",
+        "league": "NCAA_M",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "NCAA_W": {
+        "model_id": "model_c_institutional",
+        "league": "NCAA_W",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      },
+      "GENERIC": {
+        "model_id": "model_c_institutional",
+        "league": "GENERIC",
+        "metrics": {
+          "total_trades": 0
+        },
+        "proposal": null,
+        "applied": false,
+        "skip_reason": "Insufficient sample size: 0"
+      }
+    }
+  },
+  "proposals": [],
+  "applied": [],
+  "completed_at": "2026-02-12T22:21:52.412348"
+}

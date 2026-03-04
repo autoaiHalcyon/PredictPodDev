@@ -1,0 +1,8 @@
+{
+  "status": "running",
+  "pid": 1467,
+  "duration_minutes": 120,
+  "started_at": "2026-02-12T19:02:37+00:00",
+  "log_file": "/app/test_reports/soak_test_output.log",
+  "report_file": "/app/test_reports/sandbox_release_gate_report.json"
+}

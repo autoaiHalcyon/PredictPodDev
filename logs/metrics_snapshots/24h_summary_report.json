@@ -1,0 +1,50 @@
+{
+  "report_generated": "2026-02-16T11:30:05.962570+00:00",
+  "total_snapshots": 10,
+  "total_hours": 1,
+  "start_time": "2026-02-16T11:28:32.584457+00:00",
+  "end_time": "2026-02-16T11:30:05.190421+00:00",
+  "system_health": {
+    "cpu_avg": 1.0,
+    "cpu_max": 10.0,
+    "cpu_min": 0.0,
+    "memory_avg": 0.75,
+    "memory_max": 3.05,
+    "uptime_final": 0
+  },
+  "trading_activity": {
+    "total_trades": 0,
+    "total_signals": 0,
+    "total_markets_evaluated": 0
+  },
+  "performance": {
+    "final_realized_pnl": 0.0,
+    "final_unrealized_pnl": 0.0,
+    "final_total_pnl": 0.0,
+    "max_drawdown": 0,
+    "max_drawdown_pct": 0.0
+  },
+  "per_model": {
+    "model_a": {
+      "final_pnl": 0,
+      "final_trades": 0
+    },
+    "model_b": {
+      "final_pnl": 0,
+      "final_trades": 0
+    },
+    "model_c": {
+      "final_pnl": 0,
+      "final_trades": 0
+    }
+  },
+  "scheduler": {
+    "final_strategy_ticks": 2,
+    "final_discovery_ticks": 2
+  },
+  "stability": {
+    "db_failures": 0,
+    "scheduler_interruptions": 0,
+    "kill_switch_activations": 0
+  }
+}

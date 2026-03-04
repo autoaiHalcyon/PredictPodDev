@@ -1,0 +1,53 @@
+{
+  "tests": [
+    {
+      "test": "orders_survive_restart",
+      "passed": false,
+      "details": "No orders created",
+      "timestamp": "2026-02-12T19:02:27.862073"
+    },
+    {
+      "test": "no_duplicate_on_reconnect",
+      "passed": true,
+      "details": "Attempts=5, Duplicates=0",
+      "timestamp": "2026-02-12T19:02:28.422235"
+    },
+    {
+      "test": "timestamps_sequential",
+      "passed": true,
+      "details": "Checked 20 timestamps",
+      "timestamp": "2026-02-12T19:02:28.434995"
+    },
+    {
+      "test": "no_future_timestamps",
+      "passed": true,
+      "details": "Checked 24 orders, Future=0",
+      "timestamp": "2026-02-12T19:02:28.446238"
+    },
+    {
+      "test": "rate_limit_bounded",
+      "passed": true,
+      "details": "Attempts=1, Rate limit hit=True",
+      "timestamp": "2026-02-12T19:02:28.462039"
+    },
+    {
+      "test": "graceful_degradation",
+      "passed": true,
+      "details": "Success=20/20, Errors=0",
+      "timestamp": "2026-02-12T19:02:28.629177"
+    },
+    {
+      "test": "no_data_gaps",
+      "passed": true,
+      "details": "Submitted=0, Found=0, Missing=0",
+      "timestamp": "2026-02-12T19:02:29.782408"
+    },
+    {
+      "test": "audit_immutable",
+      "passed": true,
+      "details": "Entries preserved: True",
+      "timestamp": "2026-02-12T19:02:30.803980"
+    }
+  ],
+  "errors": []
+}

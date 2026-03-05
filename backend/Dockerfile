@@ -10,6 +10,6 @@ COPY . .
 EXPOSE 8000
 
 # Change this based on your main file:
-CMD ["python", "app.py"]
+CMD ["python", "server.py"]
 # OR if you use Flask: CMD ["flask", "run", "--host=0.0.0.0"]
 # OR if you use FastAPI: CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

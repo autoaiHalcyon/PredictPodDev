@@ -52,7 +52,7 @@ class ConfigVersion(BaseModel):
     Version ID format: MODEL_A_NBA_v0012
     """
     id: str = ""  # Will be set by repository
-    model_id: str  # model_a_disciplined, model_b_high_frequency, model_c_institutional
+    model_id: str  # model_1, model_2
     league: str  # NBA, NCAA_M, NCAA_W, GENERIC, or "BASE" for base config
     version_number: int = 1
     version_id: str = ""  # MODEL_A_NBA_v0001

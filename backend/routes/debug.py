@@ -111,9 +111,9 @@ def _read_metrics_snapshots(d: _date) -> List[Dict]:
 
 
 def _read_current_configs() -> Dict[str, Any]:
-    """Read model_a/b/c.json + parameter_bounds.json and merge."""
+    """Read model_1 + model_2 configs and merge."""
     out: Dict[str, Any] = {}
-    for fname in ("model_a.json", "model_b.json", "model_c.json", "parameter_bounds.json"):
+    for fname in ("model_1_enhanced_clv.json", "model_2_strong_favorite.json"):
         p = _CONFIGS_DIR / fname
         if p.exists():
             try:
@@ -407,7 +407,7 @@ def replay_decisions(
         None,
         description=(
             "Config JSON filename (basename only) inside strategies/configs/, "
-            "e.g. 'model_a.json'.  Defaults to the model's live config."
+            "e.g. 'model_1_enhanced_clv.json'. Defaults to the model's live config."
         ),
     ),
     synthetic: bool = Query(

@@ -73,12 +73,10 @@ class MetricSnapshot:
     max_drawdown_pct: float
     
     # Per-Model Breakdown
-    model_a_pnl: float
-    model_a_trades: int
-    model_b_pnl: float
-    model_b_trades: int
-    model_c_pnl: float
-    model_c_trades: int
+    model_1_pnl: float
+    model_1_trades: int
+    model_2_pnl: float
+    model_2_trades: int
     
     # Safe Mode State
     kill_switch_active: bool
@@ -252,12 +250,10 @@ class HourlyMetricsSnapshotService:
         max_drawdown = 0.0
         max_drawdown_pct = 0.0
         
-        model_a_pnl = 0.0
-        model_a_trades = 0
-        model_b_pnl = 0.0
-        model_b_trades = 0
-        model_c_pnl = 0.0
-        model_c_trades = 0
+        model_1_pnl = 0.0
+        model_1_trades = 0
+        model_2_pnl = 0.0
+        model_2_trades = 0
         
         kill_switch_active = False
         
@@ -270,15 +266,12 @@ class HourlyMetricsSnapshotService:
                 realized_pnl += portfolio.get("realized_pnl", 0)
                 unrealized_pnl += portfolio.get("unrealized_pnl", 0)
                 
-                if "model_a" in sid.lower():
-                    model_a_pnl = portfolio.get("total_pnl", 0)
-                    model_a_trades = portfolio.get("total_trades", 0)
-                elif "model_b" in sid.lower():
-                    model_b_pnl = portfolio.get("total_pnl", 0)
-                    model_b_trades = portfolio.get("total_trades", 0)
-                elif "model_c" in sid.lower():
-                    model_c_pnl = portfolio.get("total_pnl", 0)
-                    model_c_trades = portfolio.get("total_trades", 0)
+                if "model_1" in sid.lower():
+                    model_1_pnl = portfolio.get("total_pnl", 0)
+                    model_1_trades = portfolio.get("total_trades", 0)
+                elif "model_2" in sid.lower():
+                    model_2_pnl = portfolio.get("total_pnl", 0)
+                    model_2_trades = portfolio.get("total_trades", 0)
         
         total_pnl = realized_pnl + unrealized_pnl
         
@@ -338,12 +331,10 @@ class HourlyMetricsSnapshotService:
             max_drawdown=max_drawdown,
             max_drawdown_pct=max_drawdown_pct,
             
-            model_a_pnl=model_a_pnl,
-            model_a_trades=model_a_trades,
-            model_b_pnl=model_b_pnl,
-            model_b_trades=model_b_trades,
-            model_c_pnl=model_c_pnl,
-            model_c_trades=model_c_trades,
+            model_1_pnl=model_1_pnl,
+            model_1_trades=model_1_trades,
+            model_2_pnl=model_2_pnl,
+            model_2_trades=model_2_trades,
             
             kill_switch_active=kill_switch_active,
             paper_trading_mode=True,  # Always paper in current deployment

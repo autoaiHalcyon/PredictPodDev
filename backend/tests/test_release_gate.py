@@ -25,10 +25,10 @@ import uuid
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://portfolio-unified.preview.emergentagent.com').rstrip('/')
 
 # Strategy IDs
-MODEL_A = "model_a_disciplined"
-MODEL_B = "model_b_high_frequency"
-MODEL_C = "model_c_institutional"
-ALL_STRATEGIES = [MODEL_A, MODEL_B, MODEL_C]
+MODEL_1 = "model_1"
+MODEL_2 = "model_2"
+
+ALL_STRATEGIES = [MODEL_1, MODEL_2, MODEL_2]
 
 
 class TestMultiModelEngineReleaseGate:
@@ -111,14 +111,14 @@ class TestMultiModelEngineReleaseGate:
         # Model B (HF): min_edge=0.03, cooldown=60
         # Model C (Institutional): min_edge=0.07, cooldown=300
         
-        assert configs[MODEL_A]["min_edge"] > configs[MODEL_B]["min_edge"], \
+        assert configs[MODEL_1]["min_edge"] > configs[MODEL_2]["min_edge"], \
             "Model A should have higher min_edge than Model B"
-        assert configs[MODEL_C]["min_edge"] > configs[MODEL_A]["min_edge"], \
+        assert configs[MODEL_2]["min_edge"] > configs[MODEL_1]["min_edge"], \
             "Model C should have highest min_edge"
         
-        assert configs[MODEL_A]["cooldown"] > configs[MODEL_B]["cooldown"], \
+        assert configs[MODEL_1]["cooldown"] > configs[MODEL_2]["cooldown"], \
             "Model A should have longer cooldown than Model B"
-        assert configs[MODEL_C]["cooldown"] > configs[MODEL_A]["cooldown"], \
+        assert configs[MODEL_2]["cooldown"] > configs[MODEL_1]["cooldown"], \
             "Model C should have longest cooldown"
         
         print("PASS: Strategies have different configurations (min_edge, cooldown)")
@@ -500,7 +500,7 @@ class TestRulesTransparencyReleaseGate:
     
     def test_g2_rule_chips_have_correct_values(self):
         """Verify rule chips display correct threshold values"""
-        response = requests.get(f"{BASE_URL}/api/rules/model_a_disciplined")
+        response = requests.get(f"{BASE_URL}/api/rules/model_1")
         assert response.status_code == 200
         
         data = response.json()
@@ -520,9 +520,9 @@ class TestRulesTransparencyReleaseGate:
     
     def test_g3_different_chips_per_model(self):
         """Verify different models have different chip values"""
-        chips_a = requests.get(f"{BASE_URL}/api/rules/model_a_disciplined").json()["rule_chips"]
-        chips_b = requests.get(f"{BASE_URL}/api/rules/model_b_high_frequency").json()["rule_chips"]
-        chips_c = requests.get(f"{BASE_URL}/api/rules/model_c_institutional").json()["rule_chips"]
+        chips_a = requests.get(f"{BASE_URL}/api/rules/model_1").json()["rule_chips"]
+        chips_b = requests.get(f"{BASE_URL}/api/rules/model_2").json()["rule_chips"]
+        chips_c = requests.get(f"{BASE_URL}/api/rules/model_2").json()["rule_chips"]
         
         # Get edge min values
         edge_a = next(c for c in chips_a if c["label"] == "Edge min")["raw"]
@@ -601,7 +601,7 @@ class TestRulesTransparencyReleaseGate:
     def test_h4_rollback_endpoint_exists(self):
         """Verify rollback endpoint exists"""
         # Get current version
-        response = requests.get(f"{BASE_URL}/api/rules/model_a_disciplined/history?limit=1")
+        response = requests.get(f"{BASE_URL}/api/rules/model_1/history?limit=1")
         assert response.status_code == 200
         
         data = response.json()
@@ -613,7 +613,7 @@ class TestRulesTransparencyReleaseGate:
             # Rollback endpoint should exist (even if we don't actually rollback)
             # Just verify it responds properly
             response = requests.post(
-                f"{BASE_URL}/api/rules/model_a_disciplined/rollback",
+                f"{BASE_URL}/api/rules/model_1/rollback",
                 params={"league": "BASE", "target_version_id": version_id}
             )
             # Should not 404
@@ -649,7 +649,7 @@ class TestRulesTransparencyReleaseGate:
     
     def test_i2_decision_includes_values(self):
         """Verify decisions include decision-time values"""
-        response = requests.get(f"{BASE_URL}/api/strategies/model_a_disciplined")
+        response = requests.get(f"{BASE_URL}/api/strategies/model_1")
         assert response.status_code == 200
         
         data = response.json()
@@ -841,7 +841,7 @@ class TestIntegrationFlow:
     
     def test_full_rules_transparency_flow(self):
         """Test complete rules transparency flow"""
-        model_id = "model_a_disciplined"
+        model_id = "model_1"
         
         # 1. Get rules
         response = requests.get(f"{BASE_URL}/api/rules/{model_id}")

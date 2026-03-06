@@ -233,9 +233,8 @@ class ConfigVersionService:
         
         # Get model display name
         model_names = {
-            "model_a_disciplined": "Model A - Disciplined Edge Trader",
-            "model_b_high_frequency": "Model B - High Frequency Hunter",
-            "model_c_institutional": "Model C - Institutional Risk-First"
+            "model_1": "Model 1: Enhanced CLV",
+            "model_2": "Model 2: Strong Favorite Value"
         }
         
         return {

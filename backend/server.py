@@ -1672,25 +1672,22 @@ async def get_daily_evaluation_report(date: Optional[str] = None):
 
     # ── Strategy name → canonical ID mapping ────────────────────────────────
     STRATEGY_MAP = {
-        "model a":                                 "model_a_disciplined",
-        "model_a":                                 "model_a_disciplined",
-        "model_a_disciplined":                     "model_a_disciplined",
-        "model a - disciplined edge trader":       "model_a_disciplined",
-        "disciplined edge trader":                 "model_a_disciplined",
-        "model b":                                 "model_b_high_frequency",
-        "model_b":                                 "model_b_high_frequency",
-        "model_b_high_frequency":                  "model_b_high_frequency",
-        "model b - high frequency edge hunter":    "model_b_high_frequency",
-        "high frequency edge hunter":              "model_b_high_frequency",
-        "high frequency hunter":                   "model_b_high_frequency",
+        "model 1":                       "model_1",
+        "model_1":                       "model_1",
+        "model_1_enhanced_clv":          "model_1",
+        "enhanced clv":                  "model_1",
+        "model 2":                       "model_2",
+        "model_2":                       "model_2",
+        "model_2_strong_favorite":       "model_2",
+        "strong favorite":               "model_2",
     }
     DISPLAY_NAMES = {
-        "model_a_disciplined":    "Model A - Disciplined Edge Trader",
-        "model_b_high_frequency": "Model B - High Frequency Edge Hunter",
+        "model_1": "Model 1: Enhanced CLV",
+        "model_2": "Model 2: Strong Favorite Value",
     }
 
     def _strategy_id(raw: str) -> str:
-        return STRATEGY_MAP.get((raw or "").strip().lower(), "model_a_disciplined")
+        return STRATEGY_MAP.get((raw or "").strip().lower(), "model_1")
 
     # ── Pull today's closed trades from MongoDB ──────────────────────────────
     pipeline = [
@@ -1720,7 +1717,7 @@ async def get_daily_evaluation_report(date: Optional[str] = None):
 
     # ── Build response in the same shape the frontend expects ───────────────
     strategies_out = {}
-    for sid in ["model_a_disciplined", "model_b_high_frequency"]:
+    for sid in ["model_1", "model_2"]:
         b          = buckets[sid]
         total      = b["winners"] + b["losers"]
         win_rate   = round((b["winners"] / total) * 100, 1) if total else 0.0
@@ -2738,7 +2735,7 @@ async def enable_autonomous_mode():
                 logger.info("Logging autonomous mode activation...")
                 await autonomous_metrics_service.persist_audit_log({
                     "event_type": "AUTONOMOUS_MODE_ENABLED",
-                    "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"],
+                    "models": ["model_1", "model_2"],
                     "mode": "AUTO",
                     "scheduler": "2-loop (discovery + trading)",
                     "hourly_snapshots": "enabled if available"
@@ -2839,7 +2836,7 @@ async def run_trading_cycle():
     # ── Model definitions (identical to Dashboard.jsx STRATEGIES) ─────────
     MODELS = [
         {
-            "model_id": "model_a_disciplined",
+            "model_id": "model_1",
             "display_name": "Model A - Disciplined Edge Trader",
             "min_edge": 0.05,
             "min_signal_score": 65,
@@ -2847,7 +2844,7 @@ async def run_trading_cycle():
             "max_open": 10,
         },
         {
-            "model_id": "model_b_high_frequency",
+            "model_id": "model_2",
             "display_name": "Model B - High Frequency Edge Hunter",
             "min_edge": 0.03,
             "min_signal_score": 45,
@@ -2880,7 +2877,7 @@ async def run_trading_cycle():
     from models.trade import Trade
     existing_trades = await trade_repo.get_all(limit=1000)
     open_game_model_pairs: set = set()
-    model_open_counts: dict = {"model_a": 0, "model_b": 0}
+    model_open_counts: dict = {"model_1": 0, "model_2": 0}
 
     for t in existing_trades:
         closed = getattr(t, "status", None) in ("closed", "cancelled", "expired")
@@ -2888,13 +2885,13 @@ async def run_trading_cycle():
         if not closed and not has_closed_at:
             gid = getattr(t, "game_id", None)
             strat = (getattr(t, "strategy", "") or "").lower().replace(" ", "_")
-            mk = "model_b" if "model_b" in strat else "model_a"
+            mk = "model_2" if "model_2" in strat else "model_1"
             if gid:
                 open_game_model_pairs.add((gid, mk))
-            if "model_b" in strat:
-                model_open_counts["model_b"] += 1
-            elif "model_a" in strat:
-                model_open_counts["model_a"] += 1
+            if "model_2" in strat:
+                model_open_counts["model_2"] += 1
+            elif "model_1" in strat:
+                model_open_counts["model_1"] += 1
 
     placed = 0
     skipped = 0
@@ -2976,7 +2973,7 @@ async def run_trading_cycle():
 
             # ── Evaluate each model independently ────────────────────────
             for model in MODELS:
-                mk = "model_b" if "b" in model["model_id"] else "model_a"
+                mk = "model_2" if "2" in model["model_id"] else "model_1"
 
                 if (game_id, mk) in open_game_model_pairs:
                     skipped += 1

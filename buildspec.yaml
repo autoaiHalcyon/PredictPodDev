@@ -7,6 +7,14 @@ phases:
       - BACKEND_REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
       - FRONTEND_REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$FRONTEND_IMAGE_REPO_NAME
       - IMAGE_TAG=latest
+      - echo Fixing Dockerfiles to use ECR public mirror...
+      - sed -i 's|FROM python:3.11-slim|FROM public.ecr.aws/docker/library/python:3.11-slim|g' backend/Dockerfile
+      - sed -i 's|FROM node:18-alpine|FROM public.ecr.aws/docker/library/node:18-alpine|g' frontend/Dockerfile
+      - sed -i 's|FROM node:20-alpine|FROM public.ecr.aws/docker/library/node:20-alpine|g' frontend/Dockerfile
+      - sed -i 's|FROM nginx:alpine|FROM public.ecr.aws/docker/library/nginx:alpine|g' frontend/Dockerfile
+      - sed -i 's|COPY backend/requirements.txt \.|COPY requirements.txt .|g' backend/Dockerfile
+      - sed -i 's|COPY backend/ \.|COPY . .|g' backend/Dockerfile
+
   build:
     commands:
       - echo Build started on `date`
@@ -14,6 +22,7 @@ phases:
       - docker build -t $BACKEND_REPO_URI:$IMAGE_TAG -f backend/Dockerfile backend/
       - echo Building the Frontend Docker image...
       - docker build -t $FRONTEND_REPO_URI:$IMAGE_TAG -f frontend/Dockerfile frontend/
+
   post_build:
     commands:
       - echo Build completed on `date`
@@ -23,6 +32,7 @@ phases:
       - docker push $FRONTEND_REPO_URI:$IMAGE_TAG
       - echo Writing imagedefinitions.json...
       - printf '[{"name":"pp3container","imageUri":"%s"},{"name":"frontend","imageUri":"%s"}]' $BACKEND_REPO_URI:$IMAGE_TAG $FRONTEND_REPO_URI:$IMAGE_TAG > imagedefinitions.json
+
 artifacts:
   files:
     - imagedefinitions.json

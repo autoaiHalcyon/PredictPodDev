@@ -24,7 +24,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      - MONGO_URL=mongodb+srv://HalMan_db_user:Halcyon%4012%24@cluster0.ifvwnf.mongodb.net/HalcyonSecutity?retryWrites=true&w=majority
       - DB_NAME=predictpod
       - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
     volumes:

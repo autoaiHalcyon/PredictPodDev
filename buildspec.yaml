@@ -13,10 +13,10 @@ phases:
       - echo Build started on `date`
 
       - echo Building the Backend Docker image...
-      - docker build -t $BACKEND_REPO_URI:$IMAGE_TAG ./backend
+      - docker build -t $BACKEND_REPO_URI:$IMAGE_TAG -f backend/Dockerfile backend/
 
       - echo Building the Frontend Docker image...
-      - docker build -t $FRONTEND_REPO_URI:$IMAGE_TAG ./frontend
+      - docker build -t $FRONTEND_REPO_URI:$IMAGE_TAG -f frontend/Dockerfile frontend/
 
   post_build:
     commands:

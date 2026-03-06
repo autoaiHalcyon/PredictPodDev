@@ -18,9 +18,8 @@ from models.game import Game
 from models.market import Market
 from models.signal import Signal
 from strategies.base_strategy import BaseStrategy, StrategyConfig, StrategyDecision, DecisionType
-from strategies.model_a_disciplined import ModelADisciplined
-from strategies.model_b_high_frequency import ModelBHighFrequency
-from strategies.model_c_institutional import ModelCInstitutional
+from strategies.model_1_enhanced_clv import Model1EnhancedCLV
+from strategies.model_2_strong_favorite import Model2StrongFavorite
 
 logger = logging.getLogger(__name__)
 
@@ -59,29 +58,25 @@ class StrategyEngineManager:
         logger.info("StrategyEngineManager initialized")
     
     def _load_strategies(self):
-        """Load all strategy configurations and instantiate strategies.
-        
-        Active models: Model A (10 trades) + Model B (10 trades) = 20 total.
-        Model C is disabled.
+        """
+        Load the 2-model system per Master Rules v2.0.
+
+        Model 1: Enhanced CLV    — $700 allocation (70%)
+        Model 2: Strong Favorite — $300 allocation (30%)
+
+        No other models. No deviations.
         """
         strategy_configs = [
-            ("model_a_disciplined", ModelADisciplined),
-            ("model_b_high_frequency", ModelBHighFrequency),
-            # Model C is disabled
-            # ("model_c_institutional", ModelCInstitutional)
+            ("model_1_enhanced_clv",    Model1EnhancedCLV),
+            ("model_2_strong_favorite", Model2StrongFavorite),
         ]
-        
+
         for config_name, strategy_class in strategy_configs:
-            config_path = CONFIG_DIR / f"{config_name.replace('_disciplined', '_a').replace('_high_frequency', '_b').replace('_institutional', '_c')}.json"
-            
-            # Try alternate naming
-            if not config_path.exists():
-                config_path = CONFIG_DIR / f"model_{config_name.split('_')[1][0]}.json"
-            
+            config_path = CONFIG_DIR / f"{config_name}.json"
+
             if config_path.exists():
                 try:
                     config = StrategyConfig(str(config_path))
-                    # Skip if config marked as disabled
                     if not config.enabled:
                         logger.info(f"Skipping disabled strategy: {config.display_name}")
                         continue

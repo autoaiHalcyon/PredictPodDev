@@ -1,0 +1,65 @@
+{
+    "model_id": "model_1",
+    "display_name": "Model 1: Enhanced CLV",
+    "description": "Closing Line Value model. Beats the closing line by buying mispriced Kalshi markets vs. sharp consensus lines. Hold to settlement. Academic backing: Dixon & Coles, Buchdahl et al.",
+    "enabled": true,
+
+    "starting_capital": 700.0,
+    "currency": "USD",
+
+    "entry_rules": {
+        "min_edge_threshold": 0.06,
+        "market_age_min_minutes": 60,
+        "time_until_game_min_minutes": 5,
+        "time_until_game_max_hours": 4,
+        "volume_min": 5000,
+        "spread_max": 0.04
+    },
+
+    "exit_rules": {
+        "hold_to_settlement": true,
+        "no_early_exit": true
+    },
+
+    "position_sizing": {
+        "method": "half_kelly",
+        "kelly_fraction": 0.5,
+        "min_position_dollars": 0.50,
+        "max_position_pct": 0.025,
+        "max_position_dollars": 17.50
+    },
+
+    "risk_limits": {
+        "max_daily_loss_pct": 0.10,
+        "max_daily_loss_dollars": 70.0,
+        "max_open_trades": 20,
+        "max_drawdown_pct": 0.15
+    },
+
+    "filters": {
+        "allowed_leagues": ["NBA", "NCAA_M", "NCAA_W"],
+        "max_spread_pct": 0.04,
+        "min_volume_24h": 5000
+    },
+
+    "trim_rules": {
+        "enable_trim": false
+    },
+
+    "circuit_breakers": {
+        "pause_on_consecutive_losses": 10,
+        "pause_duration_seconds": 3600,
+        "pause_on_drawdown_pct": 0.10,
+        "auto_resume": true
+    },
+
+    "metrics_targets": {
+        "avg_clv_min": 0.01,
+        "avg_clv_max": 0.03,
+        "win_rate_target": 0.52,
+        "roi_target": 0.04,
+        "sharpe_target": 0.8,
+        "max_drawdown_limit": 0.15,
+        "min_trades_for_evaluation": 100
+    }
+}

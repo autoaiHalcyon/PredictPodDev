@@ -239,6 +239,99 @@ class StrategyEngineManager:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CONFIG SHIM
+# Mimics StrategyConfig so server.py can access strategy.config._config
+# and strategy.config.reload() without modification
+# ─────────────────────────────────────────────────────────────────────────────
+class _ConfigShim:
+    """
+    Drop-in replacement for StrategyConfig used by _ModelAdapter.
+    Exposes ._config (dict), .reload(), .get(), and common properties
+    so server.py / config_version_service work without any changes.
+    """
+
+    def __init__(self, config_path: str, model_id: str):
+        self.config_path = config_path
+        self._model_id = model_id
+        self._config: Dict = {}
+        self.load()
+
+    def load(self):
+        try:
+            with open(self.config_path) as f:
+                self._config = json.load(f)
+            # Ensure required fields exist for StrategyConfig compatibility
+            self._config.setdefault("model_id", self._model_id)
+            self._config.setdefault("display_name", self._model_id.replace("_", " ").title())
+            self._config.setdefault("enabled", True)
+            self._config.setdefault("starting_capital", 10000.0)
+        except Exception as e:
+            logger.error(f"_ConfigShim failed to load {self.config_path}: {e}")
+            self._config = {
+                "model_id": self._model_id,
+                "display_name": self._model_id.replace("_", " ").title(),
+                "enabled": True,
+                "starting_capital": 10000.0,
+            }
+
+    def reload(self):
+        self.load()
+
+    def get(self, key: str, default=None):
+        keys = key.split(".")
+        val = self._config
+        for k in keys:
+            if isinstance(val, dict):
+                val = val.get(k)
+            else:
+                return default
+            if val is None:
+                return default
+        return val
+
+    # Properties matching StrategyConfig interface
+    @property
+    def model_id(self) -> str:
+        return self._config.get("model_id", self._model_id)
+
+    @property
+    def display_name(self) -> str:
+        return self._config.get("display_name", self._model_id)
+
+    @property
+    def enabled(self) -> bool:
+        return self._config.get("enabled", True)
+
+    @property
+    def starting_capital(self) -> float:
+        return self._config.get("starting_capital", 10000.0)
+
+    @property
+    def entry_rules(self) -> Dict:
+        return self._config.get("entry_rules", self._config.get("parameters", {}))
+
+    @property
+    def exit_rules(self) -> Dict:
+        return self._config.get("exit_rules", {})
+
+    @property
+    def position_sizing(self) -> Dict:
+        return self._config.get("position_sizing", {})
+
+    @property
+    def risk_limits(self) -> Dict:
+        return self._config.get("risk_limits", {})
+
+    @property
+    def filters(self) -> Dict:
+        return self._config.get("filters", {})
+
+    @property
+    def circuit_breakers(self) -> Dict:
+        return self._config.get("circuit_breaker", {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LIGHTWEIGHT ADAPTER
 # Wraps Model1/Model2 so StrategyEngineManager can treat them like BaseStrategy
 # ─────────────────────────────────────────────────────────────────────────────
@@ -254,16 +347,13 @@ class _ModelAdapter:
         self.display_name = model_id.replace("_", " ").title()
         self._enabled = True
         self._decision_log: List[Dict] = []
+        self._config_path = config_path
 
         # Minimal portfolio shim so strategy_manager.strategies[id].portfolio works
         self.portfolio = _PortfolioShim(model)
 
-        # Load config dict for get_config()
-        try:
-            with open(config_path) as f:
-                self._config = json.load(f)
-        except Exception:
-            self._config = {}
+        # config object — server.py accesses strategy.config._config and strategy.config.reload()
+        self.config = _ConfigShim(config_path, model_id)
 
     def enable(self):
         self._enabled = True
@@ -369,7 +459,7 @@ class _ModelAdapter:
         return []
 
     def get_config(self) -> Dict:
-        return self._config
+        return self.config._config
 
 
 class _PortfolioShim:

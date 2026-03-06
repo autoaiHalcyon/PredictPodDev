@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from strategies.model_1_enhanced_clv import Model1EnhancedCLV, MIN_EDGE, MIN_AGE, MAX_TIMING, MIN_VOL, MAX_SPREAD
 from strategies.model_2_strong_favorite import Model2StrongFavorite, FV_COEFF, FV_MIN, EDGE_MIN, SHARP_MIN, MAX_TIMING as M2_MAX_TIMING
-from strategies.strategy_manager import StrategyManager
+from strategies.strategy_manager import StrategyEngineManager as StrategyManager
 
 
 # ─────────────────────────────────────────────────────────────────────────────

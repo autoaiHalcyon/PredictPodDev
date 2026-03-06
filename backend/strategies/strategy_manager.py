@@ -18,9 +18,10 @@ from strategies.model_2_strong_favorite import Model2StrongFavorite, M2Decision
 logger = logging.getLogger(__name__)
 
 
-class StrategyManager:
+class StrategyEngineManager:
     """
     Central coordinator for all PredictPod trading models.
+    Named StrategyEngineManager to match existing backend imports.
 
     Responsibilities:
     - Route market ticks to both models
@@ -258,3 +259,13 @@ class StrategyManager:
             self._cb[model_id]["consecutive_losses"] = 0
             self._cb[model_id]["paused_until"] = None
             logger.info(f"[MGR] Circuit breaker manually reset for {model_id}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Aliases and singleton — match existing backend imports exactly
+# ─────────────────────────────────────────────────────────────────────────────
+StrategyManager = StrategyEngineManager   # backward-compat alias
+
+# Global singleton (imported by server.py, routes, scheduler, etc.)
+strategy_manager = StrategyEngineManager()
+

@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "model_id": "model_2_strong_favorite",
+    "version": "2.1.0",
+    "updated": "2026-03-06",
+    "backtest_period": "Feb 5 – Mar 6 2026 (220 games)",
+    "optimisation_method": "Critical bug fix + grid search (5,120 combos) + 5-seed CV",
+    "critical_fix": "FV coefficient 0.028 → 0.050 (model never fired in v2.0 due to formula error)"
+  },
+
+  "parameters": {
+    "fv_coeff": 0.050,
+    "fv_min": 0.65,
+    "edge_min": 0.03,
+    "sharp_min": 0.68,
+    "max_timing_minutes": 90,
+    "min_volume": 3000,
+    "max_spread": 0.04,
+    "unit_dollar": 3.00,
+    "max_units": 2.0
+  },
+
+  "v2_0_original_parameters": {
+    "fv_coeff": 0.028,
+    "fv_min": 0.72,
+    "edge_min": 0.06,
+    "sharp_min": 0.68,
+    "max_timing_minutes": 30,
+    "min_volume": 5000,
+    "_result": "0 trades — model NEVER FIRED (fv_coeff=0.028 too low)",
+    "_root_cause": "coeff=0.028 requires 34pt rating gap for fv≥72%. Only ~1% of games qualify."
+  },
+
+  "v2_1_optimised_parameters": {
+    "fv_coeff": 0.050,
+    "fv_min": 0.65,
+    "edge_min": 0.03,
+    "sharp_min": 0.68,
+    "max_timing_minutes": 90,
+    "_result": "3 trades, 100% WR, $+9.67, ROI 53.7% (paper, same 220-game dataset)"
+  },
+
+  "fv_formula": {
+    "inputs": ["home_rating (0-100)", "away_rating (0-100)", "home_rest_days", "away_rest_days"],
+    "formula": "fv = sigmoid((home_rating - away_rating + 3.2 + (home_rest - away_rest)*0.5) * fv_coeff)",
+    "sigmoid": "1 / (1 + exp(-z))",
+    "clamp": "[0.10, 0.90]",
+    "home_court_advantage": 3.2,
+    "rest_coeff": 0.5,
+    "example": "OKC(84) vs Wizards(37): z = (84-37+3.2)*0.05 = 2.51 → fv = 92.5%"
+  },
+
+  "gates": {
+    "E1_fv_min": "fv >= 0.65 (strong favorite threshold)",
+    "E2_edge_min": "fv - kalshi_yes_price >= 0.03 (3¢ underpricing)",
+    "E3_sharp_min": "sharp_line >= 0.68 (confirms books agree)",
+    "E4_timing": "mins_until_game <= 90 (pre-game only)",
+    "E5_volume": "volume >= 3000",
+    "E6_spread": "spread <= 0.04"
+  },
+
+  "sizing": {
+    "method": "tiered_units",
+    "tiers": {
+      "edge >= 0.10": "2.0 units = $6.00",
+      "edge >= 0.08": "1.5 units = $4.50",
+      "edge < 0.08":  "1.0 unit  = $3.00"
+    },
+    "contracts": "floor(dollar_amt / kalshi_yes_price)",
+    "direction": "always YES (home team is the strong favorite)"
+  },
+
+  "exit": {
+    "rule": "hold_to_settlement",
+    "early_exit": false
+  },
+
+  "circuit_breaker": {
+    "enabled": true,
+    "consecutive_loss_pause": 3,
+    "pause_duration_seconds": 900,
+    "auto_resume": true
+  }
+}

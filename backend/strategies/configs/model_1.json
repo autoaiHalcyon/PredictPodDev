@@ -1,0 +1,72 @@
+{
+  "_meta": {
+    "model_id": "model_1_enhanced_clv",
+    "version": "2.1.0",
+    "updated": "2026-03-06",
+    "backtest_period": "Feb 5 – Mar 6 2026 (220 games)",
+    "optimisation_method": "Deep grid search (11,520 combos) + 5-seed cross-validation",
+    "notes": "Grid search profitable in 5/5 seeds. Walk-forward (Feb 26–Mar 6) confirmed: 11 trades $+63.05"
+  },
+
+  "parameters": {
+    "min_edge": 0.03,
+    "min_age_minutes": 90,
+    "max_timing_minutes": 180,
+    "min_timing_minutes": 5,
+    "min_volume": 2000,
+    "max_spread": 0.05,
+    "kelly_fraction": 0.50,
+    "max_bankroll_alloc": 700,
+    "max_trade_size": 17.50,
+    "min_trade_size": 0.50
+  },
+
+  "v2_0_original_parameters": {
+    "min_edge": 0.06,
+    "min_age_minutes": 60,
+    "max_timing_minutes": 240,
+    "min_volume": 5000,
+    "max_spread": 0.04,
+    "_result": "21 trades, 61.9% WR, $+87.45 (paper)"
+  },
+
+  "v2_1_optimised_parameters": {
+    "min_edge": 0.03,
+    "min_age_minutes": 90,
+    "max_timing_minutes": 180,
+    "min_volume": 2000,
+    "max_spread": 0.05,
+    "_result": "39 trades, 76.9% WR, $+259.32 (paper, same 220-game dataset)"
+  },
+
+  "gates": {
+    "E1_edge": "abs(kalshi_yes - sharp_line) >= min_edge",
+    "E2_age": "market_age_minutes >= min_age_minutes",
+    "E3_timing_min": "mins_until_game >= min_timing_minutes",
+    "E3_timing_max": "mins_until_game <= max_timing_minutes",
+    "E4_volume": "volume >= min_volume",
+    "E5_spread": "spread <= max_spread",
+    "E6_direction": "gap is directionally clear (k < s-edge OR k > s+edge)",
+    "E7_min_size": "computed contracts >= 1"
+  },
+
+  "sizing": {
+    "method": "half_kelly",
+    "formula": "kelly = edge / ((1/entry_price) - 1) * kelly_fraction * bankroll",
+    "clamped_to": "$0.50 – $17.50 per trade",
+    "contracts": "floor(dollar_amt / entry_price)"
+  },
+
+  "exit": {
+    "rule": "hold_to_settlement",
+    "early_exit": false,
+    "note": "Early exit invalidates CLV thesis. DO NOT CHANGE."
+  },
+
+  "circuit_breaker": {
+    "enabled": true,
+    "consecutive_loss_pause": 4,
+    "pause_duration_seconds": 600,
+    "auto_resume": true
+  }
+}

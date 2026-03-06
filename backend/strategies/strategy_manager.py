@@ -1,469 +1,260 @@
 """
-Strategy Engine Manager
+strategy_manager.py
+====================
+PredictPod — Strategy Manager v2.1
+Orchestrates Model 1 (Enhanced CLV) and Model 2 (Strong Favorite Value).
+Handles conflict resolution, circuit breakers, and session tracking.
 
-Orchestrates multiple trading strategies running in parallel.
-- Single feed, broadcast to all strategies
-- Independent execution per strategy
-- Aggregated dashboard data
-- Kill switch control
+Version: 2.1.0  |  Updated: 2026-03-06
 """
-from typing import Dict, List, Optional, Any, Callable
-from datetime import datetime, date, timedelta
-from pathlib import Path
-import asyncio
-import json
-import logging
 
-from models.game import Game
-from models.market import Market
-from models.signal import Signal
-from strategies.base_strategy import BaseStrategy, StrategyConfig, StrategyDecision, DecisionType
-from strategies.model_1_enhanced_clv import Model1EnhancedCLV
-from strategies.model_2_strong_favorite import Model2StrongFavorite
+import logging
+from typing import Dict, Optional, List
+from datetime import datetime, timedelta
+
+from strategies.model_1_enhanced_clv import Model1EnhancedCLV, M1Decision
+from strategies.model_2_strong_favorite import Model2StrongFavorite, M2Decision
 
 logger = logging.getLogger(__name__)
 
-# Config directory
-CONFIG_DIR = Path(__file__).parent / "configs"
 
+class StrategyManager:
+    """
+    Central coordinator for all PredictPod trading models.
 
-class StrategyEngineManager:
+    Responsibilities:
+    - Route market ticks to both models
+    - Enforce conflict rule: M1 and M2 cannot both have open positions on same game
+    - Circuit breaker: pause model after N consecutive losses
+    - Session-level P&L and trade count tracking
+    - Kill switch for emergency shutdown
     """
-    Manages multiple trading strategies running in parallel.
-    
-    Features:
-    - Single market feed, broadcast to all strategies
-    - Independent virtual portfolios per strategy
-    - Aggregated dashboard metrics
-    - Global kill switch
-    - Daily evaluation reports
-    """
-    
+
     def __init__(self):
-        self.strategies: Dict[str, BaseStrategy] = {}
-        self._enabled = False
-        self._kill_switch_active = False
-        self._evaluation_mode = True
-        
-        # Decision loop timing
-        self._last_tick_time: Optional[datetime] = None
-        self._tick_interval_seconds = 3  # Process every 3 seconds
-        
-        # Daily reports
-        self._daily_reports: Dict[str, Dict] = {}
-        
-        # Load strategies
-        self._load_strategies()
-        
-        logger.info("StrategyEngineManager initialized")
-    
-    def _load_strategies(self):
+        self.model1 = Model1EnhancedCLV()
+        self.model2 = Model2StrongFavorite()
+
+        self._kill_switch = False
+        self._session_start = datetime.utcnow()
+
+        # Circuit breaker state
+        self._cb: Dict[str, dict] = {
+            "model_1": {"consecutive_losses": 0, "paused_until": None, "max_losses": 4},
+            "model_2": {"consecutive_losses": 0, "paused_until": None, "max_losses": 3},
+        }
+
+        # Open position registry (game_id → which model has it)
+        self._game_positions: Dict[str, str] = {}   # game_id → "model_1" | "model_2"
+
+        # Trade history
+        self._trades: List[dict] = []
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PUBLIC: EVALUATE BOTH MODELS ON A GAME TICK
+    # ─────────────────────────────────────────────────────────────────────────
+    def evaluate(
+        self,
+        game_id:          str,
+        # Market data
+        kalshi_yes_price: float,
+        sharp_line:       float,
+        market_age_min:   int,
+        mins_until_game:  int,
+        volume:           int,
+        spread:           float,
+        # For Model 2 fair value
+        home_rating:      float = 60.0,
+        away_rating:      float = 60.0,
+        home_rest:        int   = 1,
+        away_rest:        int   = 1,
+    ) -> dict:
         """
-        Load the 2-model system per Master Rules v2.0.
-
-        Model 1: Enhanced CLV    — $700 allocation (70%)
-        Model 2: Strong Favorite — $300 allocation (30%)
-
-        No other models. No deviations.
+        Evaluate both models for a single game tick.
+        Returns decision dict with both model outcomes.
         """
-        strategy_configs = [
-            ("model_1_enhanced_clv",    Model1EnhancedCLV),
-            ("model_2_strong_favorite", Model2StrongFavorite),
-        ]
+        if self._kill_switch:
+            return {"status": "KILL_SWITCH_ACTIVE", "game_id": game_id}
 
-        for config_name, strategy_class in strategy_configs:
-            config_path = CONFIG_DIR / f"{config_name}.json"
+        results = {"game_id": game_id, "timestamp": datetime.utcnow().isoformat()}
 
-            if config_path.exists():
-                try:
-                    config = StrategyConfig(str(config_path))
-                    if not config.enabled:
-                        logger.info(f"Skipping disabled strategy: {config.display_name}")
-                        continue
-                    strategy = strategy_class(config)
-                    self.strategies[config.model_id] = strategy
-                    logger.info(f"Loaded strategy: {config.display_name}")
-                except Exception as e:
-                    logger.error(f"Failed to load strategy {config_name}: {e}")
-            else:
-                logger.warning(f"Config not found: {config_path}")
-    
-    # ==========================================
-    # CONTROL METHODS
-    # ==========================================
-    
-    def enable(self):
-        """Enable the strategy engine."""
-        self._enabled = True
-        for strategy in self.strategies.values():
-            strategy.enable()
-        logger.info("Strategy Engine ENABLED")
-    
-    def disable(self):
-        """Disable the strategy engine."""
-        self._enabled = False
-        for strategy in self.strategies.values():
-            strategy.disable()
-        logger.info("Strategy Engine DISABLED")
-    
-    def activate_kill_switch(self):
-        """Activate global kill switch - stops all strategies."""
-        self._kill_switch_active = True
-        self.disable()
-        logger.warning("KILL SWITCH ACTIVATED - All strategies stopped")
-    
-    def deactivate_kill_switch(self):
-        """Deactivate kill switch."""
-        self._kill_switch_active = False
-        logger.info("Kill switch deactivated")
-    
-    def set_evaluation_mode(self, enabled: bool):
-        """Enable/disable evaluation mode."""
-        self._evaluation_mode = enabled
-        if enabled:
-            self.enable()
-            logger.info("Evaluation Mode ENABLED - All strategies running")
+        # ── Model 1 ─────────────────────────────────────────────────────────
+        m1_blocked_by_cb = self._is_circuit_broken("model_1")
+        m1_blocked_by_conflict = game_id in self._game_positions and \
+                                  self._game_positions[game_id] == "model_2"
+
+        if m1_blocked_by_cb:
+            results["model_1"] = {"decision": "BLOCK", "reason": "CIRCUIT_BREAKER"}
+        elif m1_blocked_by_conflict:
+            results["model_1"] = {"decision": "BLOCK", "reason": "CONFLICT_M2_OPEN"}
         else:
-            logger.info("Evaluation Mode DISABLED")
-    
-    @property
-    def is_enabled(self) -> bool:
-        return self._enabled and not self._kill_switch_active
-    
-    @property
-    def is_kill_switch_active(self) -> bool:
-        return self._kill_switch_active
-    
-    # ==========================================
-    # TICK PROCESSING
-    # ==========================================
-    
-    async def process_tick(
-        self,
-        game: Game,
-        market: Market,
-        signal: Signal,
-        orderbook: Optional[Dict] = None
-    ) -> Dict[str, Optional[StrategyDecision]]:
-        """
-        Process a market tick across all strategies.
-        
-        This is the main entry point - receives single feed,
-        broadcasts to all strategies.
-        
-        Returns dict of strategy_id -> decision
-        """
-        if not self.is_enabled:
-            return {}
-        
-        self._last_tick_time = datetime.utcnow()
-        
-        decisions = {}
-        
-        # Process each strategy in parallel (but independent)
-        for strategy_id, strategy in self.strategies.items():
-            try:
-                decision = strategy.process_tick(game, market, signal, orderbook)
-                decisions[strategy_id] = decision
-            except Exception as e:
-                logger.error(f"Strategy {strategy_id} error: {e}")
-                decisions[strategy_id] = None
-        
-        return decisions
-    
-    async def process_batch(
-        self,
-        ticks: List[Dict]  # List of {game, market, signal, orderbook}
-    ) -> Dict[str, List[StrategyDecision]]:
-        """
-        Process multiple ticks (for multiple games).
-        """
-        all_decisions = {sid: [] for sid in self.strategies.keys()}
-        
-        for tick in ticks:
-            decisions = await self.process_tick(
-                game=tick.get("game"),
-                market=tick.get("market"),
-                signal=tick.get("signal"),
-                orderbook=tick.get("orderbook")
+            d1: M1Decision = self.model1.evaluate_entry(
+                game_id, kalshi_yes_price, sharp_line,
+                market_age_min, mins_until_game, volume, spread
             )
-            
-            for sid, decision in decisions.items():
-                if decision and decision.decision_type != DecisionType.HOLD:
-                    all_decisions[sid].append(decision)
-        
-        return all_decisions
-    
-    def update_position_prices(self, market_id: str, current_price: float):
-        """Update position prices across all strategies."""
-        for strategy in self.strategies.values():
-            strategy.portfolio.update_position_price(market_id, current_price)
-    
-    # ==========================================
-    # DASHBOARD DATA
-    # ==========================================
-    
-    def get_summary(self) -> Dict:
-        """Get aggregated summary for dashboard."""
-        summaries = {}
-        
-        for strategy_id, strategy in self.strategies.items():
-            summaries[strategy_id] = strategy.get_summary()
-        
-        # Find winning model
-        pnls = [(sid, s["portfolio"]["total_pnl"]) for sid, s in summaries.items()]
-        pnls_sorted = sorted(pnls, key=lambda x: x[1], reverse=True)
-        
-        winning_model = pnls_sorted[0][0] if pnls_sorted else None
-        
-        # Risk-adjusted winner (PnL / max_drawdown)
-        risk_adjusted = []
-        for sid, s in summaries.items():
-            pnl = s["portfolio"]["total_pnl"]
-            dd = max(s["portfolio"]["max_drawdown"], 1)  # Avoid div by 0
-            risk_adjusted.append((sid, pnl / dd))
-        risk_adjusted_sorted = sorted(risk_adjusted, key=lambda x: x[1], reverse=True)
-        best_risk_adjusted = risk_adjusted_sorted[0][0] if risk_adjusted_sorted else None
-        
-        return {
-            "enabled": self._enabled,
-            "kill_switch_active": self._kill_switch_active,
-            "evaluation_mode": self._evaluation_mode,
-            "last_tick": self._last_tick_time.isoformat() if self._last_tick_time else None,
-            "strategies": summaries,
-            "winning_model": winning_model,
-            "best_risk_adjusted": best_risk_adjusted,
-            "comparison": self._build_comparison_table(summaries)
-        }
-    
-    def _build_comparison_table(self, summaries: Dict) -> Dict:
-        """Build side-by-side comparison data."""
-        metrics = [
-            "total_pnl", "realized_pnl", "unrealized_pnl",
-            "total_trades", "win_rate", "avg_edge_entry",
-            "max_drawdown_pct", "risk_utilization"
-        ]
-        
-        comparison = {}
-        for metric in metrics:
-            comparison[metric] = {}
-            for sid, s in summaries.items():
-                value = s["portfolio"].get(metric, 0)
-                comparison[metric][sid] = value
-        
-        return comparison
-    
-    def get_game_positions(self, game_id: str) -> Dict[str, List[Dict]]:
-        """Get positions for a specific game across all strategies."""
-        positions = {}
-        
-        for strategy_id, strategy in self.strategies.items():
-            game_positions = strategy.portfolio.get_positions_for_game(game_id)
-            positions[strategy_id] = [p.to_dict() for p in game_positions]
-        
-        return positions
-    
-    def get_all_positions_by_game(self) -> Dict[str, Dict]:
-        """Get all positions organized by game for dashboard."""
-        games = {}
-        
-        for strategy_id, strategy in self.strategies.items():
-            for pos in strategy.portfolio.get_all_positions():
-                if pos.game_id not in games:
-                    games[pos.game_id] = {}
-                
-                games[pos.game_id][strategy_id] = {
-                    "has_position": True,
-                    "side": pos.side,
-                    "quantity": pos.quantity,
-                    "entry_price": pos.avg_entry_price,
-                    "current_price": pos.current_price,
-                    "unrealized_pnl": pos.unrealized_pnl,
-                    "status": "HOLD"
-                }
-        
-        # Fill in strategies without positions
-        for game_id in games:
-            for strategy_id in self.strategies:
-                if strategy_id not in games[game_id]:
-                    games[game_id][strategy_id] = {
-                        "has_position": False,
-                        "side": None,
-                        "quantity": 0,
-                        "entry_price": 0,
-                        "current_price": 0,
-                        "unrealized_pnl": 0,
-                        "status": "FLAT"
-                    }
-        
-        return games
-    
-    # ==========================================
-    # DECISION LOGS
-    # ==========================================
-    
-    def get_decision_logs(self, limit: int = 100) -> Dict[str, List[Dict]]:
-        """Get decision logs for all strategies."""
-        logs = {}
-        for strategy_id, strategy in self.strategies.items():
-            logs[strategy_id] = strategy.get_decision_log(limit)
-        return logs
-    
-    # ==========================================
-    # DAILY REPORTS
-    # ==========================================
-    
-    def generate_daily_report(self, date_str: Optional[str] = None) -> Dict:
-        """Generate daily evaluation report."""
-        if date_str is None:
-            date_str = date.today().isoformat()
-        
-        report = {
-            "date": date_str,
-            "generated_at": datetime.utcnow().isoformat(),
-            "strategies": {}
-        }
-        
-        for strategy_id, strategy in self.strategies.items():
-            daily_stats = strategy.portfolio.get_daily_stats(date_str)
-            league_stats = strategy.portfolio.get_stats_by_league()
-            
-            # Calculate profit factor
-            winners_pnl = sum(
-                t.pnl for t in strategy.portfolio._trades 
-                if t.direction == "sell" and t.is_winner
-            )
-            losers_pnl = abs(sum(
-                t.pnl for t in strategy.portfolio._trades 
-                if t.direction == "sell" and not t.is_winner
-            ))
-            profit_factor = winners_pnl / losers_pnl if losers_pnl > 0 else 0.0
-            
-            report["strategies"][strategy_id] = {
-                "display_name": strategy.display_name,
-                "daily_stats": daily_stats,
-                "total_pnl": strategy.portfolio.total_pnl,
-                "max_drawdown": strategy.portfolio.max_drawdown,
-                "max_drawdown_pct": strategy.portfolio.max_drawdown_pct,
-                "win_rate": strategy.portfolio.win_rate,
-                "profit_factor": round(profit_factor, 2),
-                "avg_edge_entry": strategy.portfolio.avg_edge_at_entry,
-                "avg_edge_exit": strategy.portfolio.avg_edge_at_exit,
-                "by_league": league_stats,
-                "trades_today": daily_stats.get("trades", 0)
+            results["model_1"] = {
+                "decision":    d1.decision,
+                "reason":      d1.reason,
+                "fails":       d1.fails,
+                "edge":        d1.edge,
+                "direction":   d1.direction,
+                "contracts":   d1.contracts,
+                "dollar_amt":  d1.dollar_amt,
+                "entry_price": d1.entry_price,
+                "gate_log":    d1.gate_log,
             }
-        
-        # Store for export
-        self._daily_reports[date_str] = report
-        
-        return report
-    
-    def export_daily_report_json(self, date_str: Optional[str] = None) -> str:
-        """Export daily report as JSON."""
-        if date_str is None:
-            date_str = date.today().isoformat()
-        
-        if date_str not in self._daily_reports:
-            self.generate_daily_report(date_str)
-        
-        return json.dumps(self._daily_reports[date_str], indent=2)
-    
-    def export_daily_report_csv(self, date_str: Optional[str] = None) -> str:
-        """Export daily report as CSV."""
-        if date_str is None:
-            date_str = date.today().isoformat()
-        
-        if date_str not in self._daily_reports:
-            self.generate_daily_report(date_str)
-        
-        report = self._daily_reports[date_str]
-        
-        # Build CSV
-        headers = [
-            "strategy_id", "display_name", "pnl", "max_drawdown",
-            "win_rate", "profit_factor", "trades", "avg_edge_entry"
-        ]
-        lines = [",".join(headers)]
-        
-        for sid, data in report["strategies"].items():
-            row = [
-                sid,
-                data["display_name"],
-                str(round(data["total_pnl"], 2)),
-                str(round(data["max_drawdown"], 2)),
-                str(round(data["win_rate"], 1)),
-                str(data["profit_factor"]),
-                str(data["trades_today"]),
-                str(round(data["avg_edge_entry"] * 100, 2))
-            ]
-            lines.append(",".join(row))
-        
-        return "\n".join(lines)
-    
-    # ==========================================
-    # PORTFOLIO MANAGEMENT
-    # ==========================================
-    
-    def reset_strategy(self, strategy_id: str, starting_capital: Optional[float] = None):
-        """Reset a specific strategy's portfolio."""
-        if strategy_id in self.strategies:
-            self.strategies[strategy_id].reset_portfolio(starting_capital)
-            logger.info(f"Strategy {strategy_id} portfolio reset")
-    
-    def reset_all_strategies(self):
-        """Reset all strategy portfolios."""
-        for strategy in self.strategies.values():
-            strategy.reset_portfolio()
-        logger.info("All strategy portfolios reset")
-    
-    def export_trades_csv(self, strategy_id: str) -> str:
-        """Export trades for a specific strategy."""
-        if strategy_id in self.strategies:
-            return self.strategies[strategy_id].portfolio.export_trades_csv()
-        return ""
-    
-    def export_trades_json(self, strategy_id: str) -> str:
-        """Export trades for a specific strategy."""
-        if strategy_id in self.strategies:
-            return self.strategies[strategy_id].portfolio.export_trades_json()
-        return "[]"
-    
-    # ==========================================
-    # CONFIGURATION
-    # ==========================================
-    
-    def reload_configs(self):
-        """Reload all strategy configurations."""
-        for strategy in self.strategies.values():
-            strategy.config.reload()
-        logger.info("All strategy configs reloaded")
-    
-    def get_strategy_config(self, strategy_id: str) -> Optional[Dict]:
-        """Get config for a specific strategy."""
-        if strategy_id in self.strategies:
-            return self.strategies[strategy_id].config._config
-        return None
-    
-    def update_strategy_config(self, strategy_id: str, updates: Dict) -> bool:
-        """Update strategy config (runtime only, doesn't persist)."""
-        if strategy_id not in self.strategies:
-            return False
-        
-        config = self.strategies[strategy_id].config._config
-        
-        # Deep merge updates
-        def deep_merge(base: Dict, updates: Dict):
-            for key, value in updates.items():
-                if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-                    deep_merge(base[key], value)
-                else:
-                    base[key] = value
-        
-        deep_merge(config, updates)
-        logger.info(f"Strategy {strategy_id} config updated (runtime)")
-        
-        return True
+            if d1.decision == "ENTER":
+                self._game_positions[game_id] = "model_1"
+                logger.info(f"[MGR] Model 1 entered game={game_id}")
 
+        # ── Model 2 ─────────────────────────────────────────────────────────
+        m2_blocked_by_cb = self._is_circuit_broken("model_2")
+        m2_blocked_by_conflict = game_id in self._game_positions and \
+                                  self._game_positions[game_id] == "model_1"
 
-# Global instance
-strategy_manager = StrategyEngineManager()
+        if m2_blocked_by_cb:
+            results["model_2"] = {"decision": "BLOCK", "reason": "CIRCUIT_BREAKER"}
+        elif m2_blocked_by_conflict:
+            results["model_2"] = {"decision": "BLOCK", "reason": "CONFLICT_M1_OPEN"}
+        else:
+            d2: M2Decision = self.model2.evaluate_entry(
+                game_id, home_rating, away_rating,
+                kalshi_yes_price, sharp_line,
+                mins_until_game, volume, spread,
+                home_rest, away_rest
+            )
+            results["model_2"] = {
+                "decision":   d2.decision,
+                "reason":     d2.reason,
+                "fails":      d2.fails,
+                "fv":         d2.fv,
+                "edge":       d2.edge,
+                "direction":  d2.direction,
+                "units":      d2.units,
+                "contracts":  d2.contracts,
+                "dollar_amt": d2.dollar_amt,
+                "entry_price":d2.entry_price,
+                "gate_log":   d2.gate_log,
+            }
+            if d2.decision == "ENTER":
+                self._game_positions[game_id] = "model_2"
+                logger.info(f"[MGR] Model 2 entered game={game_id}")
+
+        return results
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PUBLIC: SETTLE A GAME
+    # ─────────────────────────────────────────────────────────────────────────
+    def settle(
+        self,
+        game_id:     str,
+        home_won:    bool,
+        sharp_close: float = 0.0,   # For M1 CLV calculation
+    ) -> dict:
+        """
+        Settle all open positions for a game.
+        Updates circuit breakers based on outcome.
+        """
+        model_id = self._game_positions.pop(game_id, None)
+        results  = {"game_id": game_id, "home_won": home_won}
+
+        if model_id == "model_1":
+            rec = self.model1.settle(game_id, home_won, sharp_close)
+            if rec:
+                results["model_1"] = rec
+                self._update_circuit_breaker("model_1", rec["outcome"] == "WIN")
+                self._trades.append({"model": "model_1", **rec})
+
+        elif model_id == "model_2":
+            rec = self.model2.settle(game_id, home_won)
+            if rec:
+                results["model_2"] = rec
+                self._update_circuit_breaker("model_2", rec["outcome"] == "WIN")
+                self._trades.append({"model": "model_2", **rec})
+
+        else:
+            results["status"] = "NO_OPEN_POSITION"
+
+        return results
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # CIRCUIT BREAKER
+    # ─────────────────────────────────────────────────────────────────────────
+    def _is_circuit_broken(self, model_id: str) -> bool:
+        cb = self._cb[model_id]
+        if cb["paused_until"] and datetime.utcnow() < cb["paused_until"]:
+            return True
+        if cb["paused_until"] and datetime.utcnow() >= cb["paused_until"]:
+            cb["paused_until"] = None
+            cb["consecutive_losses"] = 0
+            logger.info(f"[CB] {model_id} circuit breaker reset — resuming")
+        return False
+
+    def _update_circuit_breaker(self, model_id: str, won: bool):
+        cb = self._cb[model_id]
+        if won:
+            cb["consecutive_losses"] = 0
+        else:
+            cb["consecutive_losses"] += 1
+            if cb["consecutive_losses"] >= cb["max_losses"]:
+                pause = 600 if model_id == "model_1" else 900
+                cb["paused_until"] = datetime.utcnow() + timedelta(seconds=pause)
+                logger.warning(
+                    f"[CB] {model_id} circuit breaker TRIGGERED — "
+                    f"{cb['consecutive_losses']} consecutive losses — "
+                    f"pausing {pause}s"
+                )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PUBLIC: STATUS & CONTROLS
+    # ─────────────────────────────────────────────────────────────────────────
+    def get_summary(self) -> dict:
+        m1 = self.model1.get_status()
+        m2 = self.model2.get_status()
+
+        m1_trades = [t for t in self._trades if t["model"] == "model_1"]
+        m2_trades = [t for t in self._trades if t["model"] == "model_2"]
+        total_pnl = sum(t["pnl"] for t in self._trades)
+
+        return {
+            "session_start":   self._session_start.isoformat(),
+            "kill_switch":     self._kill_switch,
+            "total_trades":    len(self._trades),
+            "total_pnl":       round(total_pnl, 4),
+            "open_positions":  len(self._game_positions),
+            "model_1": {
+                **m1,
+                "circuit_breaker": {
+                    "consecutive_losses": self._cb["model_1"]["consecutive_losses"],
+                    "paused": self._cb["model_1"]["paused_until"] is not None,
+                    "paused_until": self._cb["model_1"]["paused_until"].isoformat()
+                        if self._cb["model_1"]["paused_until"] else None,
+                },
+                "session_trades": len(m1_trades),
+                "session_wins":   sum(1 for t in m1_trades if t["outcome"] == "WIN"),
+            },
+            "model_2": {
+                **m2,
+                "circuit_breaker": {
+                    "consecutive_losses": self._cb["model_2"]["consecutive_losses"],
+                    "paused": self._cb["model_2"]["paused_until"] is not None,
+                    "paused_until": self._cb["model_2"]["paused_until"].isoformat()
+                        if self._cb["model_2"]["paused_until"] else None,
+                },
+                "session_trades": len(m2_trades),
+                "session_wins":   sum(1 for t in m2_trades if t["outcome"] == "WIN"),
+            },
+        }
+
+    def kill(self):
+        self._kill_switch = True
+        logger.critical("[MGR] KILL SWITCH ACTIVATED — all models halted")
+
+    def resume(self):
+        self._kill_switch = False
+        logger.info("[MGR] Kill switch cleared — models resuming")
+
+    def reset_circuit_breaker(self, model_id: str):
+        if model_id in self._cb:
+            self._cb[model_id]["consecutive_losses"] = 0
+            self._cb[model_id]["paused_until"] = None
+            logger.info(f"[MGR] Circuit breaker manually reset for {model_id}")

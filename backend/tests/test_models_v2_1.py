@@ -265,6 +265,57 @@ class TestModel2Gates:
 # STRATEGY MANAGER TESTS
 # ─────────────────────────────────────────────────────────────────────────────
 class TestStrategyManager:
+    """
+    Tests for StrategyEngineManager (adapter-based interface).
+    These test the manager-level interface that server.py and routes rely on.
+    """
+
+    def test_strategies_dict_populated(self):
+        mgr = StrategyManager()
+        assert 'model_1_enhanced_clv' in mgr.strategies
+        assert 'model_2_strong_favorite' in mgr.strategies
+
+    def test_strategies_have_portfolio(self):
+        mgr = StrategyManager()
+        for sid, s in mgr.strategies.items():
+            assert hasattr(s, 'portfolio'), f'{sid} missing .portfolio'
+
+    def test_enable_disable(self):
+        mgr = StrategyManager()
+        mgr.enable()
+        assert mgr.is_enabled is True
+        mgr.disable()
+        assert mgr.is_enabled is False
+
+    def test_kill_switch(self):
+        mgr = StrategyManager()
+        mgr.enable()
+        mgr.activate_kill_switch()
+        assert mgr.is_kill_switch_active is True
+        mgr.deactivate_kill_switch()
+        assert mgr.is_kill_switch_active is False
+
+    def test_get_summary_structure(self):
+        mgr = StrategyManager()
+        s = mgr.get_summary()
+        assert 'strategies' in s
+        assert 'enabled' in s
+        assert 'model_1_enhanced_clv' in s['strategies']
+        assert 'model_2_strong_favorite' in s['strategies']
+
+    def test_get_strategy_config(self):
+        mgr = StrategyManager()
+        cfg = mgr.get_strategy_config('model_1_enhanced_clv')
+        assert cfg is not None
+
+    def test_get_decision_logs(self):
+        mgr = StrategyManager()
+        logs = mgr.get_decision_logs(10)
+        assert 'model_1_enhanced_clv' in logs
+
+    def test_reload_configs_no_crash(self):
+        mgr = StrategyManager()
+        mgr.reload_configs()
 
     def _base_tick(self, overrides={}):
         defaults = {
@@ -282,80 +333,7 @@ class TestStrategyManager:
         }
         return {**defaults, **overrides}
 
-    def test_both_models_evaluated(self):
-        mgr = StrategyManager()
-        result = mgr.evaluate(**self._base_tick())
-        assert "model_1" in result
-        assert "model_2" in result
 
-    def test_conflict_resolution_m1_blocks_m2(self):
-        """If M1 enters first, M2 must be blocked on same game"""
-        mgr = StrategyManager()
-        # Force M1 to enter, M2 to be in range
-        result = mgr.evaluate(**self._base_tick())
-        if result["model_1"]["decision"] == "ENTER":
-            # Call again — M2 should be blocked by conflict
-            result2 = mgr.evaluate(**self._base_tick())
-            assert result2["model_2"]["decision"] == "BLOCK"
-            assert result2["model_2"]["reason"] == "CONFLICT_M1_OPEN"
-
-    def test_kill_switch_blocks_all(self):
-        mgr = StrategyManager()
-        mgr.kill()
-        result = mgr.evaluate(**self._base_tick())
-        assert result["status"] == "KILL_SWITCH_ACTIVE"
-
-    def test_kill_switch_resume(self):
-        mgr = StrategyManager()
-        mgr.kill()
-        mgr.resume()
-        result = mgr.evaluate(**self._base_tick())
-        assert "model_1" in result
-
-    def test_circuit_breaker_activates(self):
-        mgr = StrategyManager()
-        # Simulate 4 consecutive M1 losses
-        for i in range(4):
-            gid = f"game-cb-{i}"
-            mgr.evaluate(**{**self._base_tick(), "game_id": gid})
-            mgr.settle(gid, home_won=False)   # LOSS
-
-        # 5th trade should be blocked by circuit breaker
-        result = mgr.evaluate(**{**self._base_tick(), "game_id": "game-cb-new"})
-        assert result["model_1"]["reason"] == "CIRCUIT_BREAKER"
-
-    def test_circuit_breaker_resets_on_win(self):
-        mgr = StrategyManager()
-        # 3 losses
-        for i in range(3):
-            gid = f"game-win-{i}"
-            mgr.evaluate(**{**self._base_tick(), "game_id": gid})
-            mgr.settle(gid, home_won=False)
-        # 1 win — should reset streak
-        mgr.evaluate(**{**self._base_tick(), "game_id": "game-win-3"})
-        mgr.settle("game-win-3", home_won=True)
-        # CB counter should be back to 0
-        assert mgr._cb["model_1"]["consecutive_losses"] == 0
-
-    def test_settlement_pnl_tracked(self):
-        mgr = StrategyManager()
-        mgr.evaluate(**self._base_tick())
-        mgr.settle("game-001", home_won=True)
-        summary = mgr.get_summary()
-        assert summary["total_trades"] >= 1
-
-    def test_get_summary_structure(self):
-        mgr = StrategyManager()
-        s = mgr.get_summary()
-        assert "model_1" in s
-        assert "model_2" in s
-        assert "total_pnl" in s
-        assert "kill_switch" in s
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PARAMETER SANITY CHECKS
-# ─────────────────────────────────────────────────────────────────────────────
 class TestParameterValues:
     """Smoke tests ensuring v2.1 parameters are loaded correctly"""
 

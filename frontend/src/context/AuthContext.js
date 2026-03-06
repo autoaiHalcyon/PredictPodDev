@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   // Initialize auth state from localStorage
   useEffect(() => {

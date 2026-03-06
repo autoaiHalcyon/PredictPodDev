@@ -17,7 +17,7 @@ set -euo pipefail
 
 DATE="${1:-$(date -u +%Y-%m-%d)}"
 OUT_DIR="${2:-.}"
-API_BASE="${API_BASE:-http://localhost:8000}"
+API_BASE="${API_BASE:-http://localhost:8001}"
 
 FILENAME="debug_bundle_${DATE//-/}.zip"
 OUT_PATH="${OUT_DIR}/${FILENAME}"

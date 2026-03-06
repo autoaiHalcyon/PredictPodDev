@@ -10,7 +10,7 @@ services:
     environment:
       - MONGO_URL=mongodb+srv://HalMan_db_user:Halcyon%4012%24@cluster0.ifvwnf.mongodb.net/HalcyonSecutity?retryWrites=true&w=majority
       - DB_NAME=predictpod
-      - CORS_ORIGINS=https://beta.predictpod.co,http://localhost:3000
+      - CORS_ORIGINS=https://autonomous-paper.preview.emergentagent.com,https://beta.predictpod.co,https://demo.predictpod.co,http://localhost:3000,http://localhost:80,https://localhost:443,https://alpha.predictpod.co,https://alphaapi.predictpod.co
     volumes:
       - backend_logs:/app/logs
     healthcheck:
@@ -27,12 +27,11 @@ services:
     container_name: predictpod-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "80:80"
     depends_on:
       backend:
         condition: service_healthy
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:8001
+
 
 volumes:
   backend_logs:

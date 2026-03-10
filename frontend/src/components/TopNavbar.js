@@ -136,7 +136,7 @@ export default function TopNavbar() {
   const navItems = [
     { to: '/', icon: Home, label: 'Terminal' },
     { to: '/all-games', icon: Activity, label: 'All Games' },
-    { to: '/strategy-command-center', icon: Zap, label: 'Strategy Center' },
+    { to: '/strategy-center', icon: Zap, label: 'Strategy Center' },
     { to: '/trades', icon: FileText, label: 'Trades' },
     { to: '/portfolio', icon: BarChart3, label: 'Portfolio' },
     { to: '/settings', icon: Settings, label: 'Settings' },

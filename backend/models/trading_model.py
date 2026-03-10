@@ -63,13 +63,13 @@ DEFAULT_MODELS = [
     {
         "name": "Enhanced CLV",
         "status": "active",
-        "capital_allocation_pct": 60.0,
+        "capital_allocation_pct": 70.0,
         "rules": {
             "min_edge_threshold": 0.03,
             "min_clv_required": 0.025,
-            "max_odds": 0.80,
-            "min_odds": 0.10,
-            "kelly_fraction": 0.4,
+            "max_odds": 0.85,
+            "min_odds": 0.05,
+            "kelly_fraction": 0.5,
             "max_position_size_pct": 0.05,
             "lookback_window_hours": 24,
             "min_market_volume": 1500,
@@ -79,15 +79,15 @@ DEFAULT_MODELS = [
     {
         "name": "Strong Favorite Value",
         "status": "active",
-        "capital_allocation_pct": 40.0,
+        "capital_allocation_pct": 30.0,
         "rules": {
-            "min_edge_threshold": 0.05,
-            "min_clv_required": 0.03,
-            "max_odds": 0.70,
-            "min_odds": 0.15,
-            "kelly_fraction": 0.35,
-            "max_position_size_pct": 0.04,
-            "lookback_window_hours": 12,
+            "min_edge_threshold": 0.02,
+            "min_clv_required": 0.015,
+            "max_odds": 0.95,
+            "min_odds": 0.70,
+            "kelly_fraction": 0.4,
+            "max_position_size_pct": 0.03,
+            "lookback_window_hours": 48,
             "min_market_volume": 2000,
             "notes": "Targets strong favorites with high edge. More conservative sizing for safer bets."
         }

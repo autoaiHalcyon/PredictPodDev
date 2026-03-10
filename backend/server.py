@@ -1237,6 +1237,37 @@ async def validate_kalshi_keys():
     
     return await kalshi_settings_service.validate_credentials()
 
+@api_router.post("/settings/trading_mode")
+async def set_trading_mode(mode: str):
+    """
+    Set trading mode (paper or live).
+    Paper mode is safe - simulates trades.
+    Live mode executes real trades with real money.
+    """
+    if not kalshi_settings_service:
+        raise HTTPException(status_code=503, detail="Settings service not available")
+    
+    if mode not in ['paper', 'live']:
+        raise HTTPException(status_code=400, detail="Mode must be 'paper' or 'live'")
+    
+    # Update trading mode in database
+    try:
+        if mode == 'live':
+            # Enable live trading
+            result = await kalshi_settings_service.enable_live_trading(confirmed_risk=True)
+        else:
+            # Disable live trading (paper mode)
+            result = await kalshi_settings_service.disable_live_trading()
+        
+        return {
+            "success": True,
+            "mode": mode,
+            "message": f"Trading mode set to {mode.upper()}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to set trading mode: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============================================
 # LIVE TRADING CONTROL
 # ============================================

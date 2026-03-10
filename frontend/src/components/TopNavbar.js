@@ -5,11 +5,88 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Zap, FileText, Settings, BarChart3, Target, Home, TrendingUp, LogOut, Lock, User } from 'lucide-react';
+import { Activity, Zap, FileText, Settings, BarChart3, Target, Home, TrendingUp, LogOut, Lock, User, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
+import { Switch } from './ui/switch';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || '';
+
+// Trading Mode Indicator Component
+const TradingModeIndicator = () => {
+  const [isPaperMode, setIsPaperMode] = useState(true); // Default to Paper trading
+  const [loading, setLoading] = useState(false);
+
+  // Fetch current trading mode on mount
+  useEffect(() => {
+    const fetchTradingMode = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/settings/kalshi_keys`);
+        if (res.ok) {
+          const data = await res.json();
+          setIsPaperMode(data.trading_mode === 'paper' || !data.is_live_trading_active);
+        }
+      } catch (e) {
+        console.error('Failed to fetch trading mode:', e);
+      }
+    };
+    fetchTradingMode();
+  }, []);
+
+  const handleToggle = async (checked) => {
+    // checked = true means Paper mode (safe), false means Live mode (dangerous)
+    const newMode = checked ? 'paper' : 'live';
+    
+    // For Live mode, show confirmation
+    if (!checked) {
+      const confirmed = window.confirm(
+        '⚠️ WARNING: You are about to enable LIVE TRADING mode.\n\n' +
+        'This will execute REAL trades with REAL money on your Kalshi account.\n\n' +
+        'Are you sure you want to continue?'
+      );
+      if (!confirmed) return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/trading_mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: newMode })
+      });
+      if (res.ok) {
+        setIsPaperMode(checked);
+      }
+    } catch (e) {
+      console.error('Failed to update trading mode:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div 
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+        isPaperMode 
+          ? 'bg-amber-500/10 border-amber-500/30' 
+          : 'bg-red-500/10 border-red-500/30'
+      }`}
+      data-testid="trading-mode-indicator"
+    >
+      <Shield className={`w-4 h-4 ${isPaperMode ? 'text-amber-400' : 'text-red-400'}`} />
+      <span className={`text-xs font-bold ${isPaperMode ? 'text-amber-400' : 'text-red-400'}`}>
+        {isPaperMode ? 'PAPER' : 'LIVE'}
+      </span>
+      <Switch
+        checked={isPaperMode}
+        onCheckedChange={handleToggle}
+        disabled={loading}
+        className="data-[state=checked]:bg-amber-500 data-[state=unchecked]:bg-red-500"
+        data-testid="trading-mode-switch"
+      />
+    </div>
+  );
+};
 
 // Logo Component
 const Logo = () => (
@@ -168,8 +245,9 @@ export default function TopNavbar() {
             </div>
           )}
           
-          {/* Right Side - Theme Toggle & User Profile */}
+          {/* Right Side - Trading Mode, Theme Toggle & User Profile */}
           <div className="flex items-center gap-3">
+            {isAuthenticated && <TradingModeIndicator />}
             <ThemeToggle />
             {isAuthenticated && <UserProfileDropdown />}
           </div>

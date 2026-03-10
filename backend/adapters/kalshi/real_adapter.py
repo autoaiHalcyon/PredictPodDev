@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RealKalshiAdapter(KalshiAdapter):
     """
     Real Kalshi API adapter for live trading.
-    Uses Kalshi's REST API for market data and trading.
+    Uses official kalshi-python SDK for authenticated requests.
     """
     
     def __init__(
@@ -41,13 +41,60 @@ class RealKalshiAdapter(KalshiAdapter):
         self._token = None
         self._token_expiry = 0
         
-    async def _get_auth_headers(self) -> Dict[str, str]:
-        """Generate authentication headers for Kalshi API"""
-        # For API key auth (simpler method)
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+        # Initialize Kalshi SDK client
+        self._kalshi_client = None
+        self._api_client = None
+        self._init_kalshi_sdk()
+        
+    def _init_kalshi_sdk(self):
+        """Initialize the official Kalshi SDK with auth."""
+        try:
+            import tempfile
+            from kalshi_python import Configuration, ApiClient, PortfolioApi
+            
+            # Save private key to temp file (SDK requires file path)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as f:
+                f.write(self.private_key)
+                self._key_path = f.name
+            
+            # Create config
+            config = Configuration()
+            config.host = self.base_url
+            
+            # Create API client with auth
+            self._api_client = ApiClient(configuration=config)
+            self._api_client.set_kalshi_auth(self.api_key, self._key_path)
+            
+            # Create Portfolio API
+            self._portfolio_api = PortfolioApi(self._api_client)
+            
+            logger.info("Kalshi SDK initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Kalshi SDK: {e}")
+            self._api_client = None
+        
+    async def _get_auth_headers(self, method: str = "GET", path: str = "") -> Dict[str, str]:
+        """Generate authentication headers for Kalshi API v2 using RSA signature"""
+        timestamp = str(int(time.time() * 1000))
+        
+        # Create signature payload: timestamp + method + path
+        msg_string = timestamp + method.upper() + path
+        
+        headers = {
+            "Content-Type": "application/json",
+            "KALSHI-ACCESS-KEY": self.api_key,
+            "KALSHI-ACCESS-TIMESTAMP": timestamp,
         }
+        
+        # Sign with RSA using SDK method if available
+        if self._api_client and hasattr(self._api_client, 'kalshi_auth'):
+            try:
+                sig = self._api_client.kalshi_auth.sign(msg_string)
+                headers["KALSHI-ACCESS-SIGNATURE"] = sig
+            except Exception as e:
+                logger.error(f"RSA signing failed: {e}")
+        
+        return headers
     
     async def _request(
         self,
@@ -58,7 +105,11 @@ class RealKalshiAdapter(KalshiAdapter):
     ) -> Dict:
         """Make authenticated request to Kalshi API"""
         url = f"{self.base_url}{endpoint}"
-        headers = await self._get_auth_headers()
+        
+        # For signature, use full path from base URL
+        # e.g., /trade-api/v2/portfolio/balance
+        full_path = self.base_url.replace("https://api.elections.kalshi.com", "").replace("https://demo-api.kalshi.co", "") + endpoint
+        headers = await self._get_auth_headers(method, full_path)
         
         try:
             if method == "GET":
@@ -299,14 +350,27 @@ class RealKalshiAdapter(KalshiAdapter):
         await self.client.aclose()
     
     async def validate_credentials(self) -> Dict[str, Any]:
-        """Validate API credentials by making a test request"""
+        """Validate API credentials using the official Kalshi SDK"""
         try:
-            result = await self._request("GET", "/portfolio/balance")
-            return {
-                "valid": True,
-                "balance": result.get("balance", 0) / 100,
-                "message": "API credentials validated successfully"
-            }
+            # Use SDK if available
+            if self._api_client and hasattr(self, '_portfolio_api'):
+                import asyncio
+                # Run sync SDK call in thread pool
+                loop = asyncio.get_event_loop()
+                balance = await loop.run_in_executor(None, self._portfolio_api.get_balance)
+                return {
+                    "valid": True,
+                    "balance": balance.balance / 100 if hasattr(balance, 'balance') else 0,
+                    "message": "API credentials validated successfully"
+                }
+            else:
+                # Fallback to HTTP request
+                result = await self._request("GET", "/portfolio/balance")
+                return {
+                    "valid": True,
+                    "balance": result.get("balance", 0) / 100,
+                    "message": "API credentials validated successfully"
+                }
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 return {
@@ -318,6 +382,7 @@ class RealKalshiAdapter(KalshiAdapter):
                 "message": f"API error: {e.response.status_code}"
             }
         except Exception as e:
+            logger.error(f"Credential validation failed: {e}")
             return {
                 "valid": False,
                 "message": f"Connection failed: {str(e)}"

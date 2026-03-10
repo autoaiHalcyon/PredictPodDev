@@ -98,3 +98,7 @@ frontend/yarn.lock
 /.vs/slnx.sqlite
 /.vs
 /backend/logs/decision_traces
+-e 
+# Environment files
+*.env
+*.env.*

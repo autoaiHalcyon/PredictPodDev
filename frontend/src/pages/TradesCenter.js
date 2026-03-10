@@ -94,72 +94,56 @@ const isClosed = (t) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL CONFIG
+// MODEL CONFIG - Map to our 2 models: Enhanced CLV & Strong Favorite Value
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL CONFIG - Supports both default and user-created strategies
-const DEFAULT_MODEL_CONFIG = {
-  // Legacy strategy models (Model A-E)
-  model_a_disciplined: {
-    name: 'Model A',
-    subtitle: 'Disciplined Edge Trader',
-    color: 'emerald',
-    icon: Target,
-  },
-  model_b_high_frequency: {
-    name: 'Model B',
-    subtitle: 'High Frequency Hunter',
-    color: 'blue',
-    icon: TrendingUp,
-  },
-  model_c_institutional: {
-    name: 'Model C',
-    subtitle: 'Institutional Risk-First',
-    color: 'purple',
-    icon: Shield,
-  },
-  model_d_growth_focused: {
-    name: 'Model D',
-    subtitle: 'Growth Focused Trader',
-    color: 'rose',
-    icon: Rocket,
-  },
-  model_e_balanced_hunter: {
-    name: 'Model E',
-    subtitle: 'Balanced Edge Hunter',
-    color: 'amber',
-    icon: TrendingUp,
-  },
-  // New Trading Models
+// Model A → Enhanced CLV, Model B → Strong Favorite Value
+const MODEL_CONFIG = {
   enhanced_clv: {
     name: 'Enhanced CLV',
     subtitle: 'Closing Line Value Focus',
-    color: 'cyan',
+    color: 'blue',
+    bgClass: 'bg-blue-500/20 border-blue-500/50',
+    textClass: 'text-blue-400',
     icon: Target,
   },
   strong_favorite_value: {
     name: 'Strong Favorite Value',
     subtitle: 'High Edge Favorites',
-    color: 'orange',
+    color: 'purple',
+    bgClass: 'bg-purple-500/20 border-purple-500/50',
+    textClass: 'text-purple-400',
     icon: Shield,
   },
 };
 
-// Color palette for user-created strategies
-const USER_STRATEGY_COLORS = ['cyan', 'orange', 'pink', 'lime', 'indigo'];
-
-// Get display config for any strategy (supports user-created strategies)
-const getModelConfig = (strategyId, displayName = '', index = 0) => {
-  if (DEFAULT_MODEL_CONFIG[strategyId]) {
-    return DEFAULT_MODEL_CONFIG[strategyId];
+// Map legacy model IDs to our new models
+const mapToNewModel = (strategyId) => {
+  if (!strategyId) return 'enhanced_clv';
+  const s = strategyId.toLowerCase();
+  // Model A, C, E → Enhanced CLV
+  if (s.includes('model_a') || s.includes('model a') || s.includes('disciplined') ||
+      s.includes('model_c') || s.includes('model c') || s.includes('institutional') ||
+      s.includes('model_e') || s.includes('model e') || s.includes('balanced') ||
+      s.includes('enhanced') || s.includes('clv')) {
+    return 'enhanced_clv';
   }
-  // For user strategies, use display name and rotating colors
-  const color = USER_STRATEGY_COLORS[index % USER_STRATEGY_COLORS.length];
-  return {
-    name: displayName || strategyId,
-    subtitle: 'Custom Strategy',
-    color: color,
-    icon: Zap,
-  };
+  // Model B, D → Strong Favorite Value
+  if (s.includes('model_b') || s.includes('model b') || s.includes('high freq') ||
+      s.includes('model_d') || s.includes('model d') || s.includes('growth') ||
+      s.includes('strong') || s.includes('favorite')) {
+    return 'strong_favorite_value';
+  }
+  return 'enhanced_clv';
+};
+
+const getModelConfig = (strategyId) => {
+  const mappedId = mapToNewModel(strategyId);
+  return MODEL_CONFIG[mappedId] || MODEL_CONFIG.enhanced_clv;
+};
+
+const getModelName = (strategyId) => {
+  const config = getModelConfig(strategyId);
+  return config.name;
 };
 
 const MODEL_RULES = {

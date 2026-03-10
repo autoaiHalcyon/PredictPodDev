@@ -1,0 +1,67 @@
+{
+  "model_id": "model_a_disciplined",
+  "display_name": "Late Line Reversal",
+  "description": "Catches line movement reversals",
+  "enabled": true,
+  "starting_capital": 10000.0,
+  "currency": "USD",
+  "entry_rules": {
+    "min_edge_threshold": 0.05,
+    "min_signal_score": 60,
+    "min_persistence_ticks": 3,
+    "max_entries_per_game": 3,
+    "cooldown_seconds": 180,
+    "require_positive_momentum": true
+  },
+  "exit_rules": {
+    "edge_compression_exit_threshold": 0.02,
+    "profit_target_pct": 0.15,
+    "stop_loss_pct": 0.1,
+    "time_based_exit_seconds": 600,
+    "trailing_stop_pct": 0.05
+  },
+  "position_sizing": {
+    "base_size_pct": 0.02,
+    "max_position_pct": 0.05,
+    "kelly_fraction": 0.25,
+    "scale_with_edge": true,
+    "edge_scale_factor": 2.0
+  },
+  "risk_limits": {
+    "max_daily_loss_pct": 0.05,
+    "max_exposure_pct": 0.15,
+    "max_trades_per_hour": 10,
+    "max_trades_per_day": 10,
+    "max_open_trades": 10,
+    "max_trades_per_game": 3,
+    "max_drawdown_pct": 0.1
+  },
+  "filters": {
+    "min_liquidity_contracts": 50,
+    "max_spread_pct": 0.05,
+    "volatility_regime_allowed": [
+      "low",
+      "medium"
+    ],
+    "min_game_progress": 0.1,
+    "max_game_progress": 0.95,
+    "allowed_leagues": [
+      "NBA",
+      "NCAA_M",
+      "NCAA_W"
+    ]
+  },
+  "trim_rules": {
+    "enable_trim": true,
+    "trim_at_profit_pct": 0.1,
+    "trim_size_pct": 0.5,
+    "trim_on_edge_decay": true,
+    "edge_decay_threshold": 0.03
+  },
+  "circuit_breakers": {
+    "pause_on_consecutive_losses": 3,
+    "pause_duration_seconds": 600,
+    "pause_on_drawdown_pct": 0.05,
+    "auto_resume": true
+  }
+}

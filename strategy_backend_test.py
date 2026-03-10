@@ -11,7 +11,7 @@ from pathlib import Path
 import time
 
 class StrategyAPITester:
-    def __init__(self, base_url="https://696833fc-7363-4159-acec-d8810d53e09b.preview.emergentagent.com"):
+    def __init__(self, base_url="http://localhost:8001"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0

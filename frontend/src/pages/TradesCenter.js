@@ -98,6 +98,7 @@ const isClosed = (t) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL CONFIG - Supports both default and user-created strategies
 const DEFAULT_MODEL_CONFIG = {
+  // Legacy strategy models (Model A-E)
   model_a_disciplined: {
     name: 'Model A',
     subtitle: 'Disciplined Edge Trader',
@@ -127,6 +128,19 @@ const DEFAULT_MODEL_CONFIG = {
     subtitle: 'Balanced Edge Hunter',
     color: 'amber',
     icon: TrendingUp,
+  },
+  // New Trading Models
+  enhanced_clv: {
+    name: 'Enhanced CLV',
+    subtitle: 'Closing Line Value Focus',
+    color: 'cyan',
+    icon: Target,
+  },
+  strong_favorite_value: {
+    name: 'Strong Favorite Value',
+    subtitle: 'High Edge Favorites',
+    color: 'orange',
+    icon: Shield,
   },
 };
 
@@ -219,6 +233,35 @@ const MODEL_RULES = {
       trimPercentage: 35,
     },
   },
+  // New Trading Models
+  enhanced_clv: {
+    name: 'Enhanced CLV',
+    entry: { minEdge: '≥ 3.0%', minSignal: '≥ 50', profitTarget: '15%', stopLoss: '10%', maxPosition: '5% of capital', dailyLossCap: '10%' },
+    exit: {
+      profitTarget: 15,
+      stopLoss: 10,
+      edgeCompressionThreshold: 2.5,
+      timeBasedExitSeconds: 600,
+      trailingStopPercent: 5,
+      trimEnabled: true,
+      trimProfitTarget: 10,
+      trimPercentage: 50,
+    },
+  },
+  strong_favorite_value: {
+    name: 'Strong Favorite Value',
+    entry: { minEdge: '≥ 2.0%', minSignal: '≥ 50', profitTarget: '12%', stopLoss: '8%', maxPosition: '3% of capital', dailyLossCap: '8%' },
+    exit: {
+      profitTarget: 12,
+      stopLoss: 8,
+      edgeCompressionThreshold: 1.5,
+      timeBasedExitSeconds: 480,
+      trailingStopPercent: 4,
+      trimEnabled: true,
+      trimProfitTarget: 8,
+      trimPercentage: 40,
+    },
+  },
 };
 
 // Robustly map any strategy string → canonical MODEL_RULES key.
@@ -230,6 +273,9 @@ const resolveStrategyId = (strategy) => {
   const s = strategy.toLowerCase();
   // Direct key match first (already canonical)
   if (MODEL_RULES[s]) return s;
+  // Match new trading models first
+  if (s.includes('enhanced clv') || s.includes('enhanced_clv') || s.includes('clv')) return 'enhanced_clv';
+  if (s.includes('strong favorite') || s.includes('strong_favorite') || s.includes('favorite value')) return 'strong_favorite_value';
   // Match by model letter or keyword — handles all display name variants
   if (s.includes('model a') || s.includes('model_a') || s.includes('disciplined'))  return 'model_a_disciplined';
   if (s.includes('model b') || s.includes('model_b') || s.includes('high freq'))    return 'model_b_high_frequency';
@@ -1860,40 +1906,49 @@ export default function TradesCenter() {
           </div>
         )}
 
-        {/* ── Validation Mode Banner ── */}
+        {/* ── Model Stats Banner ── */}
         {(() => {
           const openTrades = trades.filter(isOpen);
-          const modelACount = openTrades.filter(t => {
-            const sid = resolveStrategyId(t.strategy);
-            return sid === 'model_a_disciplined';
-          }).length;
-          const modelBCount = openTrades.filter(t => {
-            const sid = resolveStrategyId(t.strategy);
-            return sid === 'model_b_high_frequency';
-          }).length;
+          const modelACount = openTrades.filter(t => resolveStrategyId(t.strategy) === 'model_a_disciplined').length;
+          const modelBCount = openTrades.filter(t => resolveStrategyId(t.strategy) === 'model_b_high_frequency').length;
+          const enhancedCLVCount = openTrades.filter(t => resolveStrategyId(t.strategy) === 'enhanced_clv').length;
+          const strongFavCount = openTrades.filter(t => resolveStrategyId(t.strategy) === 'strong_favorite_value').length;
+          
           const aAtLimit = modelACount >= 10;
           const bAtLimit = modelBCount >= 10;
           const atLimit = aAtLimit || bAtLimit;
+          const hasNewModels = enhancedCLVCount > 0 || strongFavCount > 0;
+          
           return (
             <div className={`rounded-xl border p-3 flex flex-wrap items-center justify-between gap-3 ${atLimit ? 'border-red-500/60 bg-red-950/30' : 'border-emerald-500/40 bg-emerald-950/20'}`}>
               <div className="flex items-center gap-2">
                 <Shield className={`w-4 h-4 ${atLimit ? 'text-red-400' : 'text-emerald-400'}`} />
                 <span className={`text-xs font-semibold ${atLimit ? 'text-red-300' : 'text-emerald-300'}`}>
-                  🔒 VALIDATION MODE
+                  🔒 PAPER TRADING
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Model A &amp; B &nbsp;·&nbsp; 10% Stop-Loss Auto-Exit &nbsp;·&nbsp; 10 Trades Each
+                  Active Models &nbsp;·&nbsp; 10% Stop-Loss Auto-Exit
                 </span>
               </div>
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className={`px-2 py-0.5 rounded font-mono font-bold ${aAtLimit ? 'bg-red-500/30 text-red-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
                   A: {modelACount}/10
                 </span>
                 <span className={`px-2 py-0.5 rounded font-mono font-bold ${bAtLimit ? 'bg-red-500/30 text-red-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
                   B: {modelBCount}/10
                 </span>
+                {(hasNewModels || true) && (
+                  <>
+                    <span className="px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/20 text-cyan-300">
+                      CLV: {enhancedCLVCount}
+                    </span>
+                    <span className="px-2 py-0.5 rounded font-mono font-bold bg-orange-500/20 text-orange-300">
+                      Fav: {strongFavCount}
+                    </span>
+                  </>
+                )}
                 {atLimit && (
-                  <span className="text-red-400 font-semibold animate-pulse">⚠ LIMIT REACHED — new trades blocked</span>
+                  <span className="text-red-400 font-semibold animate-pulse">⚠ LIMIT REACHED</span>
                 )}
               </div>
             </div>

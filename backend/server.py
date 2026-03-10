@@ -21,6 +21,7 @@ from routes.auth import router as auth_router, set_auth_service
 from routes.decisions import router as decisions_router
 from routes.debug import router as debug_router
 from routes.strategies import router as strategies_router, set_strategy_repo
+from routes.trading_models import router as trading_models_router, set_db as set_trading_models_db, seed_default_models
 from services.log_sanitizer import install_log_sanitizer
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
@@ -323,6 +324,11 @@ async def lifespan(app: FastAPI):
     
     await strategy_repo.seed_default_strategies(default_configs)
     logger.info("Strategy repository initialized")
+    
+    # Initialize trading models for Strategy Center
+    set_trading_models_db(db)
+    await seed_default_models()
+    logger.info("Trading models initialized")
     
     # Initialize Kalshi settings service
     kalshi_settings_service = KalshiSettingsService(settings_repo)
@@ -3188,4 +3194,5 @@ app.include_router(trades_router)
 app.include_router(decisions_router)
 app.include_router(debug_router)
 app.include_router(strategies_router)
+app.include_router(trading_models_router)
 app.include_router(api_router)

@@ -11,6 +11,7 @@ import Portfolio from "./pages/Portfolio";
 import Settings from "./pages/Settings";
 import StrategyCommandCenter from "./pages/StrategyCommandCenter";
 import EnhancedStrategyCommandCenter from "./pages/EnhancedStrategyCommandCenter";
+import StrategyCenter from "./pages/StrategyCenter";
 import OptimizationCenter from "./pages/OptimizationCenter";
 import AllGamesPage from "./pages/AllGamesPage";
 import CapitalPreviewPage from "./pages/CapitalPreviewPage";
@@ -102,6 +103,14 @@ const AppContent = () => {
               element={
                 <ProtectedRoute>
                   <EnhancedStrategyCommandCenter />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/strategy-center"
+              element={
+                <ProtectedRoute>
+                  <StrategyCenter />
                 </ProtectedRoute>
               }
             />

@@ -1,0 +1,68 @@
+[
+  {
+    "label": "Edge min",
+    "value": "5.0%",
+    "raw": 0.05,
+    "param": "entry_rules.min_edge_threshold"
+  },
+  {
+    "label": "Market age",
+    "value": "45min",
+    "raw": 45,
+    "param": "entry_rules.min_market_age_minutes"
+  },
+  {
+    "label": "Entry window",
+    "value": "10-200min",
+    "raw": [10, 200],
+    "param": "entry_rules.time_before_game_range"
+  },
+  {
+    "label": "Sharp books",
+    "value": "2 min",
+    "raw": 2,
+    "param": "entry_rules.sharp_books_required"
+  },
+  {
+    "label": "Max spread",
+    "value": "5%",
+    "raw": 0.05,
+    "param": "filters.max_spread_pct"
+  },
+  {
+    "label": "Min volume",
+    "value": "3000",
+    "raw": 3000,
+    "param": "filters.min_liquidity_contracts"
+  },
+  {
+    "label": "Max/game",
+    "value": "2",
+    "raw": 2,
+    "param": "risk_limits.max_trades_per_game"
+  },
+  {
+    "label": "Position sizing",
+    "value": "Half-Kelly",
+    "raw": "half_kelly",
+    "param": "position_sizing.sizing_method"
+  },
+  {
+    "label": "Max position",
+    "value": "$12.50",
+    "raw": 12.50,
+    "param": "position_sizing.max_position_dollars"
+  },
+  {
+    "label": "Exit strategy",
+    "value": "Settlement",
+    "raw": "hold_to_settlement",
+    "param": "exit_rules.exit_strategy"
+  },
+  {
+    "label": "Daily loss cap",
+    "value": "$50",
+    "raw": 50,
+    "param": "risk_limits.max_daily_loss_dollars"
+  }
+]

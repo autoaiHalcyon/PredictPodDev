@@ -174,6 +174,7 @@ const TradeRow = ({ trade, maxAbsPnl, onClose, onDelete, expanded, onToggle }) =
           {new Date(trade.timestamp).toLocaleString('en-US', {
             month: 'short', day: 'numeric',
             hour: '2-digit', minute: '2-digit',
+            timeZone: 'America/New_York',
           })}
         </td>
 
@@ -220,7 +221,7 @@ const TradeRow = ({ trade, maxAbsPnl, onClose, onDelete, expanded, onToggle }) =
                 </div>
                 <div className="text-xs text-gray-200">
                   {trade.status === 'closed' && trade.closed_at
-                    ? new Date(trade.closed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    ? new Date(trade.closed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })
                     : formatAge(trade.timestamp)}
                 </div>
               </div>
@@ -374,8 +375,8 @@ const PaperTradePortfolio = () => {
       t.pnl?.toFixed(2),
       t.entry_price > 0 ? (((t.current_price - t.entry_price) / t.entry_price) * 100).toFixed(2) : '0',
       t.status,
-      t.timestamp ? new Date(t.timestamp).toLocaleString() : '',
-      t.closed_at  ? new Date(t.closed_at ).toLocaleString() : '',
+      t.timestamp ? new Date(t.timestamp).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '',
+      t.closed_at  ? new Date(t.closed_at ).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });

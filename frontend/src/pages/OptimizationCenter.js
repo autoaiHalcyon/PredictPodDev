@@ -19,7 +19,8 @@ import {
   Clock,
   Target,
   Shield,
-  BarChart3
+  BarChart3,
+  Rocket
 } from "lucide-react";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || "";
@@ -35,7 +36,9 @@ const TUNER_MODES = [
 const MODEL_CONFIG = {
   model_a_disciplined: { name: "Model A", color: "emerald", icon: Target },
   model_b_high_frequency: { name: "Model B", color: "blue", icon: Zap },
-  model_c_institutional: { name: "Model C", color: "purple", icon: Shield }
+  model_c_institutional: { name: "Model C", color: "purple", icon: Shield },
+  model_d_growth_focused: { name: "Model D", color: "rose", icon: Rocket },
+  model_e_balanced_hunter: { name: "Model E", color: "amber", icon: TrendingUp }
 };
 
 export default function OptimizationCenter() {

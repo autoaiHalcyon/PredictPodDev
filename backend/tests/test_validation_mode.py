@@ -33,19 +33,19 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 from strategies.base_strategy import StrategyConfig, DecisionType
-from strategies.model_1_enhanced_clv import Model1EnhancedCLV
+from strategies.model_a_disciplined import ModelADisciplined
 from strategies.virtual_portfolio import VirtualPosition, VirtualPortfolio
 from models.game import Game, Team, GameStatus
 from models.market import Market
 from models.signal import Signal, SignalType
 
-CONFIG_PATH = str(BACKEND_DIR / "strategies" / "configs" / "model_1_enhanced_clv.json")
+CONFIG_PATH = str(BACKEND_DIR / "strategies" / "configs" / "model_a.json")
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def make_strategy() -> Model1EnhancedCLV:
+def make_strategy() -> ModelADisciplined:
     config = StrategyConfig(CONFIG_PATH)
-    strategy = Model1EnhancedCLV(config)
+    strategy = ModelADisciplined(config)
     strategy.enable()
     return strategy
 
@@ -92,7 +92,7 @@ def make_signal(edge: float = 0.12, score: float = 75.0,
     )
 
 
-def open_position(strategy: Model1EnhancedCLV, entry_price: float = 0.55,
+def open_position(strategy: ModelADisciplined, entry_price: float = 0.55,
                   market_id: str = None) -> str:
     """Directly inject a position into the strategy's virtual portfolio."""
     mid = market_id or f"mkt-{uuid.uuid4().hex[:8]}"
@@ -126,7 +126,7 @@ class TestMaxFiveTrades:
         strategy = make_strategy()
         limit = strategy.config.risk_limits.get("max_open_trades")
         assert limit == 5, (
-            f"Expected max_open_trades in model_1 risk_limits, got {limit!r}"
+            f"Expected max_open_trades=5 in model_a.json risk_limits, got {limit!r}"
         )
         print(f"  ✅ max_open_trades = {limit}")
 
@@ -171,7 +171,7 @@ class TestMaxFiveTrades:
         """model_b.json and model_c.json must have enabled=false."""
         import json
 
-        for model_file in ("model_2_strong_favorite.json",):
+        for model_file in ("model_b.json", "model_c.json"):
             path = BACKEND_DIR / "strategies" / "configs" / model_file
             with open(path) as f:
                 cfg = json.load(f)
@@ -189,7 +189,7 @@ class TestStopLoss10Percent:
         strategy = make_strategy()
         sl = strategy.config.exit_rules.get("stop_loss_pct")
         assert sl == 0.10, (
-            f"Expected exit config in model_1_enhanced_clv.json exit_rules, got {sl!r}"
+            f"Expected stop_loss_pct=0.10 in model_a.json exit_rules, got {sl!r}"
         )
         print(f"  ✅ stop_loss_pct = {sl} (10%)")
 

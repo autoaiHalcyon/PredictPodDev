@@ -68,7 +68,7 @@ class TestTradeExplain:
             "league": "NBA",
             "event_id": "game-001",
             "market_ticker": "NBA-GAME-001-WIN",
-            "model_id": "model_1",
+            "model_id": "model_a",
             "best_bid": 0.53,
             "best_ask": 0.57,
             "mid_price": 0.55,
@@ -423,7 +423,7 @@ class TestReplayMode:
         records = _make_synthetic_records("2026-03-02", "A", n=120)
 
         # Load default config and create a tighter variant
-        default_cfg_path = BACKEND_DIR / "strategies" / "configs" / "model_1_enhanced_clv.json"
+        default_cfg_path = BACKEND_DIR / "strategies" / "configs" / "model_a.json"
         with open(default_cfg_path) as f:
             cfg = json.load(f)
 

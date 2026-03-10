@@ -21,7 +21,8 @@ import {
   Download,
   Crown,
   Medal,
-  Settings
+  Settings,
+  Rocket
 } from "lucide-react";
 import { RulesDrawer, RuleChips } from "../components/RulesDrawer";
 
@@ -52,6 +53,22 @@ const MODEL_CONFIG = {
     icon: Shield,
     bgClass: "bg-purple-500/10 border-purple-500/30",
     textClass: "text-purple-400"
+  },
+  model_d_growth_focused: {
+    name: "Model D",
+    subtitle: "Growth Focused Trader",
+    color: "rose",
+    icon: Rocket,
+    bgClass: "bg-rose-500/10 border-rose-500/30",
+    textClass: "text-rose-400"
+  },
+  model_e_balanced_hunter: {
+    name: "Model E",
+    subtitle: "Balanced Edge Hunter",
+    color: "amber",
+    icon: TrendingUp,
+    bgClass: "bg-amber-500/10 border-amber-500/30",
+    textClass: "text-amber-400"
   }
 };
 

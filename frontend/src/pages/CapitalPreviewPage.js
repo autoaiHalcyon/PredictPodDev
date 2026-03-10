@@ -21,7 +21,8 @@ import {
   Percent,
   Clock,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Rocket
 } from "lucide-react";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || "";
@@ -51,6 +52,22 @@ const MODEL_CONFIG = {
     icon: Shield,
     bgClass: "bg-purple-500/10 border-purple-500/30",
     textClass: "text-purple-400"
+  },
+  model_d_growth_focused: {
+    name: "Model D",
+    subtitle: "Growth Focused",
+    color: "rose",
+    icon: Rocket,
+    bgClass: "bg-rose-500/10 border-rose-500/30",
+    textClass: "text-rose-400"
+  },
+  model_e_balanced_hunter: {
+    name: "Model E",
+    subtitle: "Balanced Hunter",
+    color: "amber",
+    icon: TrendingUp,
+    bgClass: "bg-amber-500/10 border-amber-500/30",
+    textClass: "text-amber-400"
   }
 };
 

@@ -333,10 +333,12 @@ const STRATEGIES = [
   {
     id: 'model_a', name: 'Model A', color: 'emerald',
     description: 'Disciplined Edge Trader - 5% min edge, momentum required, 15% profit target, 3-loss circuit breaker.',
-    side: 'yes', direction: 'buy',
+    direction: 'buy',
     model: 'Model A',
+    // side is derived at runtime from signal.edge sign (positive → YES on the
+    // favoured team, negative → NO on the overpriced team)
     rules: [
-      { label: 'Edge ≥ 5%',          check: (s) => (s?.edge || 0) >= 0.05 },
+      { label: 'Edge ≥ 5%',          check: (s) => Math.abs(s?.edge || 0) >= 0.05 },
       { label: 'Signal Score ≥ 60',  check: (s) => (s?.signal_score || 0) >= 60 },
       { label: 'Momentum required',  check: (s) => !!s?.momentum_aligned },
       { label: 'Risk tier LOW',      check: (s) => s?.risk_tier === 'low' },
@@ -345,10 +347,10 @@ const STRATEGIES = [
   {
     id: 'model_b', name: 'Model B', color: 'blue',
     description: 'High Frequency Hunter - 3% min edge, 8% profit target, 5-loss circuit breaker, fast entries.',
-    side: 'yes', direction: 'buy',
+    direction: 'buy',
     model: 'Model B',
     rules: [
-      { label: 'Edge ≥ 3%',          check: (s) => (s?.edge || 0) >= 0.03 },
+      { label: 'Edge ≥ 3%',          check: (s) => Math.abs(s?.edge || 0) >= 0.03 },
       { label: 'Signal Score ≥ 45',  check: (s) => (s?.signal_score || 0) >= 45 },
       { label: 'Risk tier LOW/MED',  check: (s) => ['low', 'medium'].includes(s?.risk_tier) },
     ],
@@ -356,10 +358,10 @@ const STRATEGIES = [
   {
     id: 'model_c', name: 'Model C', color: 'purple',
     description: 'Institutional Risk-First - 7% min edge, 20% profit target, premium signal quality, manual reset.',
-    side: 'yes', direction: 'buy',
+    direction: 'buy',
     model: 'Model C',
     rules: [
-      { label: 'Edge ≥ 7%',           check: (s) => (s?.edge || 0) >= 0.07 },
+      { label: 'Edge ≥ 7%',           check: (s) => Math.abs(s?.edge || 0) >= 0.07 },
       { label: 'Signal Score ≥ 75',   check: (s) => (s?.signal_score || 0) >= 75 },
       { label: 'Momentum required',   check: (s) => !!s?.momentum_aligned },
       { label: 'Risk tier LOW',       check: (s) => s?.risk_tier === 'low' },
@@ -376,7 +378,10 @@ const evaluateStrategies = (signal, isClutch) =>
     return { strategy: strat, ruleResults, matched: ruleResults.every((r) => r.passed) };
   });
 
-const AUTO_TRADE_COOLDOWN_MS = 60_000;
+const AUTO_TRADE_COOLDOWN_MS  = 60_000;  // 1 min between auto-trades per game
+const STOP_LOSS_PCT           = 0.10;    // 10% of cost basis → close trade
+const PROFIT_TARGET_PCT       = 0.15;    // 15% of cost basis → close trade
+const MAX_AUTO_TRADES_PER_DAY = 10;      // per model, across all games
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COLOR HELPERS
@@ -517,7 +522,9 @@ const TradesList = ({ gameId, refreshKey, onCloseRequest }) => {
           const effEntry  = isNoTrade ? 1 - (t.entry_price || 0) : (t.entry_price || 0);
           const curYes    = t.current_price ?? t.entry_price ?? 0;
           const effCur    = isNoTrade ? 1 - curYes : curYes;
-          const returnPct = effEntry > 0 ? ((effCur - effEntry) / effEntry) * 100 : 0;
+          // returnPct relative to cost basis (not raw price), so 15% profit target shows correctly
+          const costBasis = effEntry * (t.quantity || 1);
+          const returnPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
 
           return (
             <div key={t.id}
@@ -683,6 +690,7 @@ const GameDetail = () => {
   const [autoTradeQty, setAutoTradeQty]         = useState(5);
   const [autoTradeLog, setAutoTradeLog]         = useState([]);
   const lastAutoTradeRef = useRef(0);
+  const lastAutoPriceRef = useRef(null); // tracks last entry price to block duplicate triggers
 
   const addTrade = useTradingStore((state) => state.addTrade);
 
@@ -849,22 +857,56 @@ const GameDetail = () => {
   useEffect(() => {
     if (!autoTradeEnabled || !data) return;
 
-    const edgeRaw = data?.signal?.edge || 0;
-    const edgePct = Math.abs(edgeRaw * 100);
+    const edgeRaw  = data?.signal?.edge || 0;
+    const edgePct  = Math.abs(edgeRaw * 100);
     if (edgePct < edgeThreshold) return;
 
     const now = Date.now();
     if (now - lastAutoTradeRef.current < AUTO_TRADE_COOLDOWN_MS) return;
 
-    const market = data?.markets?.find((m) => m.outcome === 'home');
+    // ── Daily trade limit (counts trades placed today, EST) ──────────────────
+    const todayEst = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+    const tradesToday = autoTradeLog.filter((e) => {
+      const d = new Date(e.timestamp).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      return d === todayEst && e.success;
+    });
+    if (tradesToday.length >= MAX_AUTO_TRADES_PER_DAY) {
+      console.log(`[AUTO] Daily limit of ${MAX_AUTO_TRADES_PER_DAY} trades reached`);
+      return;
+    }
+
+    // ── Game-end guard — don't open new trades in last 5 min or if settled ──
+    const gameStatus = data?.game?.status;
+    if (['final', 'settled', 'closed'].includes(gameStatus)) return;
+    if (data?.game?.expiration) {
+      const minsLeft = (new Date(data.game.expiration) - new Date()) / 60000;
+      if (minsLeft < 5) return;
+    }
+
+    // ── Determine side from edge direction ───────────────────────────────────
+    // positive edge: model thinks home is UNDERPRICED → BUY YES on home
+    // negative edge: model thinks home is OVERPRICED  → BUY YES on away (or BUY NO on home)
+    const autoSide      = edgeRaw >= 0 ? 'yes' : 'no';
+    const targetOutcome = edgeRaw >= 0 ? 'home' : 'away';
+    const market        = data?.markets?.find((m) => m.outcome === targetOutcome)
+                       || data?.markets?.find((m) => m.outcome === 'home');
     if (!market) return;
 
-    const autoSide       = edgeRaw >= 0 ? 'yes' : 'no';
-    const entryPrice     = autoSide === 'yes' ? market.yes_ask : (1 - market.yes_bid);
+    // entry price: for YES buy → ask; for NO buy → (1 - bid) of same market
+    const entryPrice = autoSide === 'yes'
+      ? market.yes_ask
+      : (1 - market.yes_bid);
+
+    // Guard: don't trigger if spread is zero or price hasn't moved (instant fill at same price)
+    if (!entryPrice || entryPrice <= 0 || entryPrice >= 1) return;
+    const lastAutoPrice = lastAutoPriceRef?.current ?? null;
+    if (lastAutoPrice !== null && Math.abs(entryPrice - lastAutoPrice) < 0.002) return; // < 0.2¢ move
+
     const teamDisplayName = market.team_name || market.name;
 
     const executeAutoTrade = async () => {
-      lastAutoTradeRef.current = now;
+      lastAutoTradeRef.current  = now;
+      if (lastAutoPriceRef) lastAutoPriceRef.current = entryPrice;
       try {
         const newTrade = {
           id:            `auto-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
@@ -878,12 +920,13 @@ const GameDetail = () => {
           direction:     'buy',
           quantity:      autoTradeQty,
           entry_price:   entryPrice,
-          current_price: market.yes_price,
+          current_price: autoSide === 'yes' ? market.yes_price : (1 - market.yes_price),
           type:          'auto-edge',
           strategy:      `Auto-Edge (${edgePct.toFixed(1)}% edge)`,
           signal_type:   data?.signal?.signal_type || null,
           edge:          edgeRaw,
           status:        'open',
+          // ── Store timestamps in ISO with explicit UTC to avoid timezone confusion ──
           timestamp:     new Date().toISOString(),
           pnl:           0,
         };
@@ -899,7 +942,7 @@ const GameDetail = () => {
           side:      autoSide.toUpperCase(),
           qty:       autoTradeQty,
           success:   true,
-          message:   `${teamDisplayName} · ${autoSide.toUpperCase()} ${autoTradeQty}c @ ${(entryPrice * 100).toFixed(0)}¢`,
+          message:   `${teamDisplayName} · ${autoSide.toUpperCase()} ${autoTradeQty}c @ ${(entryPrice * 100).toFixed(0)}¢ (${edgeRaw >= 0 ? 'home' : 'away'} edge)`,
         }, ...prev].slice(0, 10));
       } catch (err) {
         setAutoTradeLog((prev) => [{
@@ -913,9 +956,52 @@ const GameDetail = () => {
     };
 
     executeAutoTrade();
-  }, [data, autoTradeEnabled, edgeThreshold, autoTradeQty, gameId, addTrade]);
+  }, [data, autoTradeEnabled, edgeThreshold, autoTradeQty, gameId, addTrade, autoTradeLog]);
 
-  // ── Early returns ─────────────────────────────────────────────────────────
+  // ── Stop-Loss / Profit-Target / Game-End Auto-Close ──────────────────────
+  useEffect(() => {
+    if (!data) return;
+    const gameStatus = data?.game?.status;
+    const isGameOver = ['final', 'settled', 'closed'].includes(gameStatus);
+
+    // fetch open trades and check exit conditions
+    fetchTrades({ gameId, status: 'open' }).then((openTrades) => {
+      openTrades.forEach(async (trade) => {
+        const currentYes = data?.markets?.find((m) =>
+          m.id === trade.market_id || m.team_name === trade.market_name
+        )?.yes_price ?? trade.entry_price;
+
+        const currentPrice = trade.side === 'yes' ? currentYes : (1 - currentYes);
+        const entryCents   = trade.side === 'yes' ? trade.entry_price : (1 - trade.entry_price);
+        const costBasis    = entryCents * trade.quantity;
+        const pnl          = (currentPrice - entryCents) * trade.quantity;
+        // Round to 6dp to eliminate floating-point drift at exact thresholds
+        const returnPct    = costBasis > 0 ? Math.round((pnl / costBasis) * 1e6) / 1e6 : 0;
+
+        let exitReason = null;
+
+        if (isGameOver) {
+          exitReason = 'game_settled';
+        } else if (returnPct <= -STOP_LOSS_PCT) {
+          exitReason = `stop_loss_${(returnPct * 100).toFixed(1)}pct`;
+        } else if (returnPct >= PROFIT_TARGET_PCT) {
+          exitReason = `profit_target_${(returnPct * 100).toFixed(1)}pct`;
+        }
+
+        if (exitReason) {
+          try {
+            await closeTrade(trade.id, currentPrice, exitReason);
+            bumpTrades();
+            console.log(`[EXIT] Trade ${trade.id} closed: ${exitReason} @ ${(currentPrice * 100).toFixed(0)}¢`);
+          } catch (err) {
+            console.error('[EXIT] Failed to close trade:', err);
+          }
+        }
+      });
+    }).catch(console.error);
+  // Run on every data refresh (every 60s poll)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   if (loading && !data) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">

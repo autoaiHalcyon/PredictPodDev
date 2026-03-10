@@ -1,0 +1,68 @@
+{
+    "model_id": "model_d_growth_focused",
+    "display_name": "Model D - Growth Focused Trader",
+    "description": "Moderate edge threshold, balanced sizing, growth-oriented approach",
+    "enabled": true,
+    
+    "starting_capital": 10000.0,
+    "currency": "USD",
+    
+    "entry_rules": {
+        "min_edge_threshold": 0.04,
+        "min_signal_score": 55,
+        "min_persistence_ticks": 2,
+        "max_entries_per_game": 4,
+        "cooldown_seconds": 120,
+        "require_positive_momentum": true
+    },
+    
+    "exit_rules": {
+        "edge_compression_exit_threshold": 0.015,
+        "profit_target_pct": 0.12,
+        "stop_loss_pct": 0.08,
+        "time_based_exit_seconds": 450,
+        "trailing_stop_pct": 0.04
+    },
+    
+    "position_sizing": {
+        "base_size_pct": 0.025,
+        "max_position_pct": 0.06,
+        "kelly_fraction": 0.30,
+        "scale_with_edge": true,
+        "edge_scale_factor": 1.5
+    },
+    
+    "risk_limits": {
+        "max_daily_loss_pct": 0.06,
+        "max_exposure_pct": 0.18,
+        "max_trades_per_hour": 12,
+        "max_trades_per_day": 15,
+        "max_open_trades": 12,
+        "max_trades_per_game": 4,
+        "max_drawdown_pct": 0.12
+    },
+    
+    "filters": {
+        "min_liquidity_contracts": 40,
+        "max_spread_pct": 0.055,
+        "volatility_regime_allowed": ["low", "medium", "high"],
+        "min_game_progress": 0.05,
+        "max_game_progress": 0.98,
+        "allowed_leagues": ["NBA", "NCAA_M", "NCAA_W"]
+    },
+    
+    "trim_rules": {
+        "enable_trim": true,
+        "trim_at_profit_pct": 0.08,
+        "trim_size_pct": 0.40,
+        "trim_on_edge_decay": true,
+        "edge_decay_threshold": 0.02
+    },
+    
+    "circuit_breakers": {
+        "pause_on_consecutive_losses": 4,
+        "pause_duration_seconds": 300,
+        "pause_on_drawdown_pct": 0.08,
+        "auto_resume": true
+    }
+}

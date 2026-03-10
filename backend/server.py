@@ -11,7 +11,7 @@ Enhanced with:
 - Rate limiting
 - Production-ready health checks
 """
-from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query, Request
+from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -367,18 +367,10 @@ async def lifespan(app: FastAPI):
     try:
         from services.autonomous_scheduler import AutonomousScheduler
         from services.autonomous_metrics import AutonomousMetricsService
-        from services.kalshi_ingestor_v2 import KalshiBasketballIngestorV2
         autonomous_metrics_service = AutonomousMetricsService(db)
-        # Bug #2 fix: pass live ingestor so discovery loop fetches real Kalshi markets
-        _kalshi_ingestor = KalshiBasketballIngestorV2(db=db)
-        try:
-            await _kalshi_ingestor.connect()
-        except Exception as _ie:
-            logger.warning(f'Kalshi ingestor connect warning (will retry): {_ie}')
         autonomous_scheduler_instance = AutonomousScheduler(
             db=db,
-            strategy_manager=strategy_manager,
-            kalshi_ingestor=_kalshi_ingestor,
+            strategy_manager=strategy_manager
         )
         await autonomous_scheduler_instance.start()
         strategy_manager.enable()
@@ -1672,22 +1664,25 @@ async def get_daily_evaluation_report(date: Optional[str] = None):
 
     # ── Strategy name → canonical ID mapping ────────────────────────────────
     STRATEGY_MAP = {
-        "model 1":                       "model_1",
-        "model_1":                       "model_1",
-        "model_1_enhanced_clv":          "model_1",
-        "enhanced clv":                  "model_1",
-        "model 2":                       "model_2",
-        "model_2":                       "model_2",
-        "model_2_strong_favorite":       "model_2",
-        "strong favorite":               "model_2",
+        "model a":                                 "model_a_disciplined",
+        "model_a":                                 "model_a_disciplined",
+        "model_a_disciplined":                     "model_a_disciplined",
+        "model a - disciplined edge trader":       "model_a_disciplined",
+        "disciplined edge trader":                 "model_a_disciplined",
+        "model b":                                 "model_b_high_frequency",
+        "model_b":                                 "model_b_high_frequency",
+        "model_b_high_frequency":                  "model_b_high_frequency",
+        "model b - high frequency edge hunter":    "model_b_high_frequency",
+        "high frequency edge hunter":              "model_b_high_frequency",
+        "high frequency hunter":                   "model_b_high_frequency",
     }
     DISPLAY_NAMES = {
-        "model_1": "Model 1: Enhanced CLV",
-        "model_2": "Model 2: Strong Favorite Value",
+        "model_a_disciplined":    "Model A - Disciplined Edge Trader",
+        "model_b_high_frequency": "Model B - High Frequency Edge Hunter",
     }
 
     def _strategy_id(raw: str) -> str:
-        return STRATEGY_MAP.get((raw or "").strip().lower(), "model_1")
+        return STRATEGY_MAP.get((raw or "").strip().lower(), "model_a_disciplined")
 
     # ── Pull today's closed trades from MongoDB ──────────────────────────────
     pipeline = [
@@ -1717,7 +1712,7 @@ async def get_daily_evaluation_report(date: Optional[str] = None):
 
     # ── Build response in the same shape the frontend expects ───────────────
     strategies_out = {}
-    for sid in ["model_1", "model_2"]:
+    for sid in ["model_a_disciplined", "model_b_high_frequency"]:
         b          = buckets[sid]
         total      = b["winners"] + b["losers"]
         win_rate   = round((b["winners"] / total) * 100, 1) if total else 0.0
@@ -1839,16 +1834,25 @@ async def rollback_strategy_rules(strategy_id: str, league: str, target_version_
     return result
 
 @api_router.post("/rules/{strategy_id}/update")
-async def update_strategy_rules(strategy_id: str, league: str = "BASE", config: Dict = None, change_summary: str = ""):
+async def update_strategy_rules(
+    strategy_id: str, 
+    league: str = "BASE",
+    body: Dict = Body(...)
+):
     """Update rules for a strategy and save new version."""
     if not config_version_service or not config_version_repo:
         raise HTTPException(status_code=503, detail="Config versioning not initialized")
     
+    config = body.get("config")
+    change_summary = body.get("change_summary", "Manual rules adjustment")
+    
     if not config:
-        raise HTTPException(status_code=400, detail="Config is required")
+        logger.error(f"No config provided for {strategy_id}. Body: {body}")
+        raise HTTPException(status_code=400, detail="Config is required in request body")
     
     try:
         logger.info(f"Updating rules for {strategy_id} ({league})")
+        logger.info(f"New config received: {list(config.keys())}")
         from models.config_version import ConfigVersion, ConfigChangeSource
         from datetime import datetime
         
@@ -1899,14 +1903,33 @@ async def update_strategy_rules(strategy_id: str, league: str = "BASE", config: 
         saved = await config_version_repo.save_config(new_version)
         logger.info(f"Config version saved successfully: {saved.version_id}")
         
+        # Also write updated config back to JSON file so strategies reload it
+        try:
+            from pathlib import Path
+            config_dir = Path(__file__).parent / "strategies" / "configs"
+            config_filename = f"{strategy_id.replace('_disciplined', '_a').replace('_high_frequency', '_b').replace('_institutional', '_c').replace('_growth_focused', '_d').replace('_balanced_hunter', '_e')}.json"
+            config_path = config_dir / config_filename
+            
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=4)
+            logger.info(f"Updated config file: {config_path}")
+        except Exception as e:
+            logger.error(f"Failed to update config JSON file: {e}")
+        
         # Reload strategy with new config
         strategy_manager.reload_configs()
+        logger.info(f"✓ Strategy configs reloaded. Changes applied to {strategy_id}")
         
         return {
             "success": True,
             "new_version_id": saved.version_id,
             "version_number": saved.version_number,
-            "message": "Rules updated successfully"
+            "message": f"Rules updated successfully for {strategy_id}",
+            "changes": {
+                "saved_to_database": True,
+                "saved_to_json_file": True,
+                "configs_reloaded": True
+            }
         }
     
     except Exception as e:
@@ -2735,7 +2758,7 @@ async def enable_autonomous_mode():
                 logger.info("Logging autonomous mode activation...")
                 await autonomous_metrics_service.persist_audit_log({
                     "event_type": "AUTONOMOUS_MODE_ENABLED",
-                    "models": ["model_1", "model_2"],
+                    "models": ["model_a_disciplined", "model_b_high_frequency", "model_c_institutional"],
                     "mode": "AUTO",
                     "scheduler": "2-loop (discovery + trading)",
                     "hourly_snapshots": "enabled if available"
@@ -2836,7 +2859,7 @@ async def run_trading_cycle():
     # ── Model definitions (identical to Dashboard.jsx STRATEGIES) ─────────
     MODELS = [
         {
-            "model_id": "model_1",
+            "model_id": "model_a_disciplined",
             "display_name": "Model A - Disciplined Edge Trader",
             "min_edge": 0.05,
             "min_signal_score": 65,
@@ -2844,7 +2867,7 @@ async def run_trading_cycle():
             "max_open": 10,
         },
         {
-            "model_id": "model_2",
+            "model_id": "model_b_high_frequency",
             "display_name": "Model B - High Frequency Edge Hunter",
             "min_edge": 0.03,
             "min_signal_score": 45,
@@ -2877,7 +2900,7 @@ async def run_trading_cycle():
     from models.trade import Trade
     existing_trades = await trade_repo.get_all(limit=1000)
     open_game_model_pairs: set = set()
-    model_open_counts: dict = {"model_1": 0, "model_2": 0}
+    model_open_counts: dict = {"model_a": 0, "model_b": 0}
 
     for t in existing_trades:
         closed = getattr(t, "status", None) in ("closed", "cancelled", "expired")
@@ -2885,13 +2908,13 @@ async def run_trading_cycle():
         if not closed and not has_closed_at:
             gid = getattr(t, "game_id", None)
             strat = (getattr(t, "strategy", "") or "").lower().replace(" ", "_")
-            mk = "model_2" if "model_2" in strat else "model_1"
+            mk = "model_b" if "model_b" in strat else "model_a"
             if gid:
                 open_game_model_pairs.add((gid, mk))
-            if "model_2" in strat:
-                model_open_counts["model_2"] += 1
-            elif "model_1" in strat:
-                model_open_counts["model_1"] += 1
+            if "model_b" in strat:
+                model_open_counts["model_b"] += 1
+            elif "model_a" in strat:
+                model_open_counts["model_a"] += 1
 
     placed = 0
     skipped = 0
@@ -2973,7 +2996,7 @@ async def run_trading_cycle():
 
             # ── Evaluate each model independently ────────────────────────
             for model in MODELS:
-                mk = "model_2" if "2" in model["model_id"] else "model_1"
+                mk = "model_b" if "b" in model["model_id"] else "model_a"
 
                 if (game_id, mk) in open_game_model_pairs:
                     skipped += 1

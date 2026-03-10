@@ -1,0 +1,68 @@
+[
+  {
+    "label": "Edge min",
+    "value": "6.0%",
+    "raw": 0.06,
+    "param": "entry_rules.min_edge_threshold"
+  },
+  {
+    "label": "Fair value min",
+    "value": "72%",
+    "raw": 0.72,
+    "param": "entry_rules.min_fair_value"
+  },
+  {
+    "label": "Sharp line min",
+    "value": "68%",
+    "raw": 0.68,
+    "param": "entry_rules.min_sharp_line"
+  },
+  {
+    "label": "Entry window",
+    "value": "Last 30min",
+    "raw": 30,
+    "param": "entry_rules.max_time_before_game_minutes"
+  },
+  {
+    "label": "Max spread",
+    "value": "4%",
+    "raw": 0.04,
+    "param": "filters.max_spread_pct"
+  },
+  {
+    "label": "Min volume",
+    "value": "5000",
+    "raw": 5000,
+    "param": "filters.min_liquidity_contracts"
+  },
+  {
+    "label": "Max/game",
+    "value": "1",
+    "raw": 1,
+    "param": "risk_limits.max_trades_per_game"
+  },
+  {
+    "label": "Position sizing",
+    "value": "Tiered",
+    "raw": "tiered",
+    "param": "position_sizing.sizing_method"
+  },
+  {
+    "label": "Max position",
+    "value": "$7.50",
+    "raw": 7.50,
+    "param": "position_sizing.max_position_dollars"
+  },
+  {
+    "label": "Exit strategy",
+    "value": "Settlement",
+    "raw": "hold_to_settlement",
+    "param": "exit_rules.exit_strategy"
+  },
+  {
+    "label": "Daily loss cap",
+    "value": "$30",
+    "raw": 30,
+    "param": "risk_limits.max_daily_loss_dollars"
+  }
+]

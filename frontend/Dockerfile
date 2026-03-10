@@ -1,24 +1,33 @@
-# Stage 1 - Build
-FROM public.ecr.aws/docker/library/node:20-alpine AS build
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-COPY yarn.lock ./
+# Copy package files
+COPY package.json yarn.lock ./
+
+# Install dependencies
 RUN yarn install --frozen-lockfile
 
-ARG REACT_APP_BACKEND_URL
-ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
-
+# Copy source code
 COPY . .
+
+# Build the application
 RUN yarn build
 
-# Stage 2 - Serve with nginx
-FROM public.ecr.aws/docker/library/nginx:alpine
+# Production stage
+FROM nginx:alpine
 
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy built files
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

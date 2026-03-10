@@ -48,6 +48,14 @@ class ConfigVersionRepository:
         # Generate version ID from version_number (must be set by caller)
         config.version_id = config.generate_version_id()
         
+        # If this is meant to be active, deactivate other versions for this model/league
+        if config.is_active:
+            await self.configs.update_many(
+                {"model_id": config.model_id, "league": config.league, "is_active": True},
+                {"$set": {"is_active": False}}
+            )
+            logger.info(f"Deactivated previous versions for {config.model_id}/{config.league}")
+        
         # Check if this version_id already exists to avoid duplicate key error
         existing = await self.get_config_by_version_id(config.version_id)
         

@@ -498,34 +498,16 @@ const Dashboard = () => {
             
             if (trade.game_id) {
               const serverTimestamp = trade.timestamp ? new Date(trade.timestamp).getTime() : Date.now();
-              
-              // ✅ FIX: Resolve model_id and exitRules from the strategy name stored in DB.
-              // Previously both were null, causing checkExits to skip recovered trades entirely
-              // (both `if (!exitRules) continue` and `if (!model) continue` fired → stop-loss dead).
-              const strategyName = trade.strategy || '';
-              const resolvedModel = STRATEGIES.find(s =>
-                s.display_name === strategyName ||
-                s.model_id === strategyName ||
-                strategyName.toLowerCase().includes(s.display_name.toLowerCase().split(' ')[2] || s.model_id)
-              ) || STRATEGIES.find(s => s.enabled !== false); // fallback: first enabled model (Model A)
-
               recoveredPositions[trade.game_id] = {
                 tradeId: trade.id,
                 tradeId_db: trade.id,
-                model_id: resolvedModel?.model_id || 'model_a_disciplined',
-                model_name: strategyName || resolvedModel?.display_name || 'Model A - Disciplined Edge Trader',
-                side: trade.side || 'yes',
+                model_id: null, // Not available from DB, but not critical
+                model_name: trade.strategy || 'Auto-Trade',
                 entryPrice: trade.entry_price,
                 fairPrice: trade.entry_price,
                 createdAt: serverTimestamp,
                 createdAt_server: trade.timestamp,
-                exitRules: resolvedModel?.exit_rules || {
-                  // Hard-coded safe defaults if model lookup fails
-                  stop_loss_pct: 0.10,
-                  profit_target_pct: 0.15,
-                  time_based_exit_seconds: 600,
-                  edge_compression_exit_threshold: 0.02,
-                },
+                exitRules: null, // Will use model defaults
               };
               console.log(`[DASHBOARD] 📍 Recovered OPEN position: ${trade.game_id} opened ${new Date(serverTimestamp).toLocaleTimeString()}`);
             }
@@ -563,11 +545,6 @@ const Dashboard = () => {
   const isExitingRef   = useRef(false);
   // ⚠️ Track trades recovered from DB so we can skip their first exit check
   const recoveredTradesRef = useRef(new Set());
-  // ✅ FIX: Track the worst (most negative) pnlPercent seen during the 60s grace window
-  // per game. If stop-loss was breached during the grace period, we exit at exactly 60s
-  // even if the price has since recovered — preventing a breach from going undetected.
-  // Map: gameId -> { worstPnl: number, breachedDuringGrace: boolean }
-  const newlyPlacedRef = useRef(new Set()); // trades placed in last 20s — non-stop-loss exits skip them
 
   // Diagnostic: Log games structure on first load
   useEffect(() => {
@@ -782,6 +759,10 @@ const Dashboard = () => {
                 strategy: matchedModel.display_name,
                 signal_type: signal?.signal_type,
                 edge: edge,
+                // Entry context — displayed in trade detail modal "This Trade's Entry"
+                entry_signal_score: Math.round(signal?.signal_score || 0),
+                entry_edge: edge,
+                entry_reason: `${signal?.signal_type || 'AUTO'} | Edge ${(edge * 100).toFixed(2)}% | Score ${Math.round(signal?.signal_score || 0)} | ${isClutch ? 'CLUTCH' : 'Regular'}`,
                 status: 'open',
                 timestamp: new Date().toISOString(),
                 pnl: 0,
@@ -820,10 +801,6 @@ const Dashboard = () => {
               };
               autoTradePositionsRef.current = { ...autoTradePositionsRef.current, [gameId]: newPosition };
               setAutoTradePositions({ ...autoTradePositionsRef.current });
-              // ✅ FIX: Mark newly placed trade for 20s full-skip, then track worst pnl
-              // for the remainder of the 60s grace window.
-              newlyPlacedRef.current.add(gameId);
-              setTimeout(() => newlyPlacedRef.current.delete(gameId), 20000); // 20s skip for non-stop-loss exits
               console.log(`[CYCLE-${cycleId}] 📍 Position tracked with server timestamp: ${new Date(serverTimestamp).toLocaleTimeString()}`);
               
               // Update stats
@@ -906,32 +883,12 @@ const Dashboard = () => {
         console.log(`[AUTO-EXIT] 🔍 Checking ${openPositions.length} open position(s) for exit conditions...`);
 
         for (const [gameId, position] of openPositions) {
-          // newlyPlacedRef marks trades placed in the last 20s.
-          // Stop-loss ALWAYS fires immediately regardless of this flag — no grace for stop-loss.
-          // Only non-stop-loss conditions (edge compression, time-based) respect this skip.
-          const isNewlyPlaced = newlyPlacedRef.current.has(gameId);
-
-          // ✅ FIX: Grace period only skips if we have no live game price yet.
-          // If gamesRef has fresh data for this game, evaluate immediately so trades
-          // that were already past stop-loss before the page loaded are closed promptly.
+          // ⚠️ CRITICAL: Skip exit checks for trades just recovered from DB on first cycle
+          // This prevents closing trades that were just recovered from the database
           if (recoveredTradesRef.current.has(gameId)) {
-            const freshGameItem = gamesRef.current.find(g =>
-              g.game.id === gameId ||
-              g.game.event_ticker === gameId ||
-              g.raw?.event_ticker === gameId ||
-              gameId.startsWith(g.game.id + '-') ||
-              (g.raw?.event_ticker && gameId.startsWith(g.raw.event_ticker))
-            );
-            const hasFreshPrice = freshGameItem &&
-              (freshGameItem.yes_bid != null || freshGameItem.yes_ask != null || freshGameItem.last_price != null);
-            if (!hasFreshPrice) {
-              console.log(`[AUTO-EXIT] ⏭️ SKIP (just recovered, no live price yet): ${gameId}`);
-              recoveredTradesRef.current.delete(gameId);
-              continue;
-            }
-            // Live price available — evaluate immediately, remove from skip set
-            console.log(`[AUTO-EXIT] ✅ Recovered trade has live price, evaluating immediately: ${gameId}`);
-            recoveredTradesRef.current.delete(gameId);
+            console.log(`[AUTO-EXIT] ⏭️ SKIP (just recovered): ${gameId} - Recovered trades skip first exit check for safety`);
+            recoveredTradesRef.current.delete(gameId); // Remove from skip list
+            continue;
           }
           
           // Find current game data
@@ -953,22 +910,12 @@ const Dashboard = () => {
             continue;
           }
 
-          // === Find the model for this position (must come BEFORE exitRules) ===
-          // ✅ FIX: Fall back to first enabled model if model_id is null (recovered trades).
-          const model = STRATEGIES.find(s => s.model_id === position.model_id)
-            || STRATEGIES.find(s => s.enabled !== false);
-          // Never skip due to missing model — we always have a fallback
+          const exitRules = position.exitRules;
+          if (!exitRules) continue;
 
-          // ✅ FIX: Never skip — fall back through position.exitRules → model.exit_rules → hard defaults.
-          // Previously exitRules was null on recovery → 'if (!exitRules) continue' silently killed stop-loss.
-          const exitRules = position.exitRules ||
-            model?.exit_rules || {
-              stop_loss_pct: 0.10,
-              profit_target_pct: 0.15,
-              time_based_exit_seconds: 600,
-              edge_compression_exit_threshold: 0.02,
-            };
-          // exitRules and model are now always defined
+          // === Find the model for this position to access all parameters ===
+          const model = STRATEGIES.find(s => s.model_id === position.model_id);
+          if (!model) continue;
 
           const yesPrice  = gameItem.market ?? gameItem.market_price / 100 ?? 0.5;
           // For P&L use side-adjusted effective prices: flip both entry+current for NO trades
@@ -1006,11 +953,7 @@ const Dashboard = () => {
             }
           }
           
-          // ========== PRIORITY 4: STOP LOSS — FIRES IMMEDIATELY, NO GRACE, NO EXCEPTIONS ==========
-          // Stop-loss is a hard capital protection rule. It fires the instant pnlPercent
-          // reaches -stop_loss_pct regardless of how old the trade is. No time gate,
-          // no grace window, no delay. This is the only way to guarantee the loss never
-          // exceeds the threshold in any scenario.
+          // ========== PRIORITY 4: STOP LOSS HIT (NO TIME GATE - Limit Losses IMMEDIATELY) ==========
           if (pnlPercent <= -exitRules.stop_loss_pct && exitPriority < 4) {
             exitReason = `❌ STOP LOSS: P&L ${(pnlPercent * 100).toFixed(2)}% ≤ -${(exitRules.stop_loss_pct * 100).toFixed(1)}%`;
             exitPriority = 4;
@@ -1024,17 +967,12 @@ const Dashboard = () => {
             exitType = 'profit_target';
           }
           
-          // ⚠️ FOR OTHER CONDITIONS (edge compression, time-based): Apply minimum time gate.
-          // Also skip for newly placed trades (<20s) — these non-stop-loss exits need settled prices.
+          // ⚠️ FOR OTHER CONDITIONS: Apply minimum time gate
           if (exitPriority < 3) {
-            if (isNewlyPlaced) {
-              console.log(`[EXIT-GATE] ⏭️ ${gameId}: Non-stop-loss exit skipped (newly placed <20s)`);
-              continue;
-            }
             const minTimeSeconds = exitRules.time_based_exit_seconds || 600;
             if (heldTimeSeconds < minTimeSeconds) {
               console.log(`[EXIT-GATE] ⏱️ ${gameId}: BLOCKED - Held ${heldTimeMinutes.toFixed(1)}min / ${(minTimeSeconds / 60).toFixed(0)}min required. P&L: ${(pnlPercent * 100).toFixed(2)}% (will retry in ${(minTimeSeconds - heldTimeSeconds).toFixed(0)}s)`);
-              continue;
+              continue; // SKIP OTHER CONDITIONS UNTIL MINIMUM TIME IS MET
             }
           }
           

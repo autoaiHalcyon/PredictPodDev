@@ -128,9 +128,15 @@ export function fromDbDoc(doc) {
   const currentPrice = doc.current_price  ?? entryPrice;
   const exitPrice    = doc.exit_price     ?? null;
   const curOrExit    = doc.status === 'closed' ? (exitPrice ?? currentPrice) : currentPrice;
-  const pnl          = doc.status === 'open'
-    ? computePnl(doc.side, entryPrice, currentPrice, doc.quantity)
-    : (doc.pnl != null ? doc.pnl : computePnl(doc.side, entryPrice, curOrExit, doc.quantity));
+  const pnl          = doc.pnl != null && doc.status === 'closed'
+    ? doc.pnl
+    : computePnl(doc.side, entryPrice, curOrExit, doc.quantity);
+
+  // cost basis in dollars: how much was risked
+  const entryCents   = doc.side === 'yes' ? entryPrice : 1 - entryPrice;
+  const costBasis    = entryCents * (doc.quantity ?? 0);
+  // returnPct: percentage of cost basis gained/lost
+  const returnPct    = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
 
   return {
     id:            doc.id,
@@ -154,6 +160,7 @@ export function fromDbDoc(doc) {
     timestamp:     doc.created_at,
     closed_at:     doc.closed_at   || null,
     pnl,
+    returnPct,
     fees:          doc.fees        || 0,
   };
 }
@@ -172,8 +179,14 @@ function normaliseStatus(s) {
 
 // ── P&L helpers ───────────────────────────────────────────────────────────────
 export function computePnl(side, entryPrice, currentPrice, quantity) {
-  const eff = (p) => side === 'yes' ? p : 1 - p;
-  return Math.round((eff(currentPrice) - eff(entryPrice)) * quantity * 100) / 100;
+  // Prices are stored as decimals (0.0–1.0) where 1 unit = 1 cent.
+  // One contract is worth $1 at expiry, so each cent of price move on
+  // 'quantity' contracts = quantity × $0.01.
+  // P&L = (exitCents - entryCents) × quantity × $0.01
+  // For NO trades: we hold the NO side, so profit when yes_price falls.
+  const entryCents   = side === 'yes' ? entryPrice   : 1 - entryPrice;
+  const currentCents = side === 'yes' ? currentPrice : 1 - currentPrice;
+  return Math.round((currentCents - entryCents) * quantity * 100) / 100;
 }
 
 function calcFees(quantity, price) {

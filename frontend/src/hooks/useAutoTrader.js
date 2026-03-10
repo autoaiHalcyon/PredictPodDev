@@ -9,6 +9,8 @@ import { useTradingStore } from '../stores/tradingStore';
 const API_BASE = process.env.REACT_APP_BACKEND_URL || '';
 const MAX_RETRIES = 2;
 
+const MAX_TRADES_PER_DAY = 10;
+
 export default function useAutoTrader(options = {}) {
   const { 
     enabled = true,
@@ -22,7 +24,27 @@ export default function useAutoTrader(options = {}) {
     addTrade
   } = useTradingStore();
   
-  const pendingTradesRef = useRef(new Set());
+  const pendingTradesRef  = useRef(new Set());
+  // Daily counter: initialised to today so first check() never spuriously resets the count
+  const dailyCountRef = useRef({
+    dateEst: new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
+    count: 0
+  });
+
+  // Returns true if under daily limit
+  const checkDailyLimit = () => {
+    const todayEst = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+    if (dailyCountRef.current.dateEst !== todayEst) {
+      // New day — reset counter
+      dailyCountRef.current = { dateEst: todayEst, count: 0 };
+    }
+    return dailyCountRef.current.count < MAX_TRADES_PER_DAY;
+  };
+
+  const incrementDailyCount = () => {
+    dailyCountRef.current.count += 1;
+    console.log(`[AUTO_TRADER] Daily trade count: ${dailyCountRef.current.count}/${MAX_TRADES_PER_DAY}`);
+  };
   
   // Execute a live trade with retries
   const executeLiveTrade = useCallback(async (tradeParams) => {
@@ -42,6 +64,12 @@ export default function useAutoTrader(options = {}) {
     if (!currentStore.autoMode) {
       console.log('[AUTO_TRADER] Trade blocked - Auto Mode OFF');
       return { success: false, reason: 'auto_mode_off' };
+    }
+
+    // Check daily trade limit
+    if (!checkDailyLimit()) {
+      console.log(`[AUTO_TRADER] Trade blocked - daily limit of ${MAX_TRADES_PER_DAY} reached`);
+      return { success: false, reason: 'daily_limit_reached' };
     }
     
     pendingTradesRef.current.add(tradeKey);
@@ -80,6 +108,7 @@ export default function useAutoTrader(options = {}) {
             pnl: 0
           });
           
+          incrementDailyCount();
           onTradeSuccess(data);
           pendingTradesRef.current.delete(tradeKey);
           return { success: true, data };

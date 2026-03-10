@@ -151,26 +151,28 @@ async def place_trade(
     Persist a new paper (or live) trade.
     Returns the saved document in the same shape the frontend expects.
     
-    Active models: Model 1 (Enhanced CLV) + Model 2 (Strong Favorite Value).
+    Active models: Model A (max 10 open) + Model B (max 10 open) = 20 total.
     """
-    # ── VALIDATION: Only allow Model 1 or Model 2 ────────────────────────────
-    MAX_OPEN_TRADES_PER_MODEL = 20
+    # ── VALIDATION: Only allow Model A or Model B ────────────────────────────
+    MAX_OPEN_TRADES_PER_MODEL = 10
     ALLOWED_STRATEGIES = (
-        "model_1", "model_1_enhanced_clv", "model 1", "enhanced clv",
-        "model_2", "model_2_strong_favorite", "model 2", "strong favorite",
+        "model_a_disciplined", "model a", "model_a",
+        "model a - disciplined edge trader",
+        "model_b_high_frequency", "model b", "model_b",
+        "model b - high frequency edge hunter",
     )
 
     if body.strategy and body.strategy.lower() not in ALLOWED_STRATEGIES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Only Model 1 (Enhanced CLV) and Model 2 (Strong Favorite) are active. "
+            detail=f"Only Model A and Model B are active. "
                    f"Received strategy: '{body.strategy}'"
         )
 
-    # ── VALIDATION: Max open trades per model ─────────────────────────────────
+    # ── VALIDATION: Max 10 open trades per model ─────────────────────────────
     all_trades = await repo.get_all(limit=1000)
-    is_model_2 = body.strategy and "2" in body.strategy.lower()
-    model_label = "model_2" if is_model_2 else "model_1"
+    is_model_b = body.strategy and "b" in body.strategy.lower()
+    model_label = "model_b" if is_model_b else "model_a"
 
     open_for_model = sum(
         1 for t in all_trades
@@ -181,7 +183,7 @@ async def place_trade(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Max open trade limit ({MAX_OPEN_TRADES_PER_MODEL}) reached for "
-                   f"{'Model 2' if is_model_2 else 'Model 1'}. Close some positions first."
+                   f"{'Model B' if is_model_b else 'Model A'}. Close some positions first."
         )
 
     # ── VALIDATION: Reject trades with a zero or missing entry price ─────────

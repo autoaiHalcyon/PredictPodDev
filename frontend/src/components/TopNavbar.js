@@ -1,141 +1,180 @@
-import React, { useState, useEffect, useRef } from 'react';
+/**
+ * TopNavbar Component
+ * Global navigation bar visible on all pages
+ * Contains: Logo, Navigation Links, Status Indicators, User Profile
+ */
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Activity, Zap, FileText, Settings, BarChart3, Target, Home, TrendingUp, LogOut, Lock, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import ThemeToggle from './ThemeToggle';
 
-const API = process.env.REACT_APP_BACKEND_URL || '';
+const API_BASE = process.env.REACT_APP_BACKEND_URL || '';
 
-const NAV = [
-  { to: '/',         label: 'Dashboard',  exact: true },
-  { to: '/trades',   label: 'Trades' },
-  { to: '/portfolio',label: 'Portfolio' },
-  { to: '/phases',   label: 'Phases' },
-  { to: '/rules',    label: 'Rules' },
-];
+// Logo Component
+const Logo = () => (
+  <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity" data-testid="logo">
+    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+      <Activity className="w-5 h-5 text-white" />
+    </div>
+    <span className="text-xl font-bold tracking-tight">
+      Predict<span className="text-primary">Pod</span>
+    </span>
+    <span className="text-xs px-2 py-0.5 bg-primary/20 rounded text-primary font-medium">v2.0</span>
+  </Link>
+);
 
-export default function TopNavbar() {
+// Navigation Link Component
+const NavLink = ({ to, icon: Icon, children, isActive }) => (
+  <Link
+    to={to}
+    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+      isActive
+        ? 'bg-primary/20 text-primary border-b-2 border-primary'
+        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+    }`}
+    data-testid={`nav-${to.replace('/', '') || 'home'}`}
+  >
+    {Icon && <Icon className="w-4 h-4" />}
+    {children}
+  </Link>
+);
+
+// User Profile Dropdown Component
+const UserProfileDropdown = () => {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
-  const [health, setHealth] = useState(null);
-  const [open, setOpen] = useState(false);
-  const ref = useRef();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
+  // Close dropdown when clicking outside
   useEffect(() => {
-    const fetch_ = () =>
-      fetch(`${API}/api/health`).then(r => r.json()).then(setHealth).catch(() => {});
-    fetch_();
-    const t = setInterval(fetch_, 10000);
-    return () => clearInterval(t);
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+    setIsOpen(false);
+  };
 
-  const engineOn = health?.autonomous_enabled ?? false;
-  const dbOk     = health?.db_ping ?? false;
+  if (!user) {
+    return null;
+  }
 
   return (
-    <nav style={{
-      position: 'sticky', top: 0, zIndex: 100,
-      background: 'rgba(5,9,17,.92)',
-      borderBottom: '1px solid #111e34',
-      backdropFilter: 'blur(12px)',
-      display: 'flex', alignItems: 'center',
-      padding: '0 24px', height: 52,
-      fontFamily: "'JetBrains Mono', monospace",
-    }}>
-      {/* Logo */}
-      <Link to="/" style={{ textDecoration:'none', display:'flex', alignItems:'center', gap:8, marginRight:32 }}>
-        <span style={{ width:28, height:28, borderRadius:6, background:'linear-gradient(135deg,#0ea5e9,#10b981)',
-          display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:'#fff', flexShrink:0 }}>P</span>
-        <span style={{ fontSize:14, fontWeight:700, color:'#e2eeff', letterSpacing:'.02em' }}>
-          Predict<span style={{ color:'#0ea5e9' }}>Pod</span>
-        </span>
-        <span style={{ fontSize:9, padding:'1px 6px', borderRadius:3, background:'rgba(14,165,233,.15)',
-          color:'#0ea5e9', letterSpacing:'.1em', border:'1px solid rgba(14,165,233,.2)' }}>ALPHA</span>
-      </Link>
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+        title={user.email}
+      >
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+          {user.name.charAt(0).toUpperCase()}
+        </div>
+        <span className="hidden sm:inline text-xs">{user.name.split(' ')[0]}</span>
+      </button>
 
-      {/* Nav links */}
-      <div style={{ display:'flex', gap:2, flex:1 }}>
-        {NAV.map(n => {
-          const active = n.exact ? location.pathname === n.to : location.pathname.startsWith(n.to);
-          return (
-            <Link key={n.to} to={n.to} style={{ textDecoration:'none' }}>
-              <div style={{
-                padding:'6px 12px', borderRadius:6, fontSize:12, fontWeight:500,
-                color: active ? '#e2eeff' : '#3a5570',
-                background: active ? 'rgba(14,165,233,.1)' : 'transparent',
-                borderBottom: active ? '2px solid #0ea5e9' : '2px solid transparent',
-                transition: 'all .15s', letterSpacing:'.04em',
-              }}>
-                {n.label}
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Status indicators */}
-      <div style={{ display:'flex', alignItems:'center', gap:16, marginRight:16 }}>
-        <StatusDot on={engineOn} label="ENGINE" />
-        <StatusDot on={dbOk}    label="DB" />
-        <StatusDot on={true}    label="PAPER" color="#f59e0b" />
-      </div>
-
-      {/* User menu */}
-      <div ref={ref} style={{ position:'relative' }}>
-        <button onClick={() => setOpen(o => !o)} style={{
-          display:'flex', alignItems:'center', gap:8, padding:'5px 10px',
-          background:'rgba(14,165,233,.08)', border:'1px solid rgba(14,165,233,.15)',
-          borderRadius:6, cursor:'pointer', color:'#7a9bbf', fontSize:11,
-        }}>
-          <span>{user?.username || user?.email?.split('@')[0] || 'user'}</span>
-          <span style={{ fontSize:8 }}>▾</span>
-        </button>
-        {open && (
-          <div style={{
-            position:'absolute', top:'calc(100% + 6px)', right:0, minWidth:140,
-            background:'#0a1220', border:'1px solid #1a2e4a', borderRadius:8,
-            padding:'4px 0', zIndex:200,
-            boxShadow:'0 8px 24px rgba(0,0,0,.5)',
-          }}>
-            <MenuItem onClick={() => { navigate('/rules'); setOpen(false); }}>Master Rules</MenuItem>
-            <MenuItem onClick={() => { navigate('/phases'); setOpen(false); }}>Phases</MenuItem>
-            <div style={{ borderTop:'1px solid #111e34', margin:'4px 0' }} />
-            <MenuItem onClick={() => { logout(); navigate('/login'); }} danger>Sign out</MenuItem>
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
+          {/* User Info */}
+          <div className="px-4 py-3 border-b border-border">
+            <p className="text-sm font-semibold text-foreground">{user.name}</p>
+            <p className="text-xs text-muted-foreground">{user.email}</p>
           </div>
-        )}
-      </div>
-    </nav>
-  );
-}
 
-function StatusDot({ on, label, color }) {
-  const c = color || (on ? '#10b981' : '#3a5570');
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-      <div style={{ width:6, height:6, borderRadius:'50%', background:c,
-        boxShadow: on ? `0 0 5px ${c}` : 'none',
-        animation: on && !color ? 'pulse 2s infinite' : 'none' }} />
-      <span style={{ fontSize:9, color:c, letterSpacing:'.1em' }}>{label}</span>
+          {/* Menu Items */}
+          <div className="py-2">
+            <Link
+              to="/"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <Home className="w-4 h-4" />
+              Dashboard
+            </Link>
+            <Link
+              to="/change-password"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <Lock className="w-4 h-4" />
+              Change Password
+            </Link>
+          </div>
+
+          {/* Logout Button */}
+          <div className="px-4 py-2 border-t border-border">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 px-0 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition-colors w-full"
+            >
+              <LogOut className="w-4 h-4" />
+              Log Out
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
 
-function MenuItem({ onClick, danger, children }) {
-  const [hover, setHover] = useState(false);
+// Main TopNavbar Component
+export default function TopNavbar() {
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const { isAuthenticated } = useAuth();
+
+  const navItems = [
+    { to: '/', icon: Home, label: 'Terminal' },
+    { to: '/all-games', icon: Activity, label: 'All Games' },
+    { to: '/strategy-command-center', icon: Zap, label: 'Strategy Center' },
+    { to: '/trades', icon: FileText, label: 'Trades' },
+    { to: '/portfolio', icon: BarChart3, label: 'Portfolio' },
+    { to: '/settings', icon: Settings, label: 'Settings' },
+  ];
+
   return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{
-        width:'100%', textAlign:'left', padding:'8px 14px', background: hover ? 'rgba(255,255,255,.04)' : 'transparent',
-        border:'none', cursor:'pointer', fontSize:12, fontFamily:'inherit',
-        color: danger ? '#ef4444' : '#7a9bbf',
-      }}>
-      {children}
-    </button>
+    <nav 
+      className="sticky top-10 z-40 bg-card/95 backdrop-blur border-b border-border"
+      data-testid="top-navbar"
+    >
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-14">
+          {/* Logo */}
+          <Logo />
+          
+          {/* Navigation Links */}
+          {isAuthenticated && (
+            <div className="flex items-center gap-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  icon={item.icon}
+                  isActive={currentPath === item.to || (item.to !== '/' && currentPath.startsWith(item.to))}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          )}
+          
+          {/* Right Side - Theme Toggle & User Profile */}
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            {isAuthenticated && <UserProfileDropdown />}
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 }

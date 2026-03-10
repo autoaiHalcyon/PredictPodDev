@@ -21,7 +21,7 @@ import {
   RefreshCw, Activity, DollarSign, Search, Filter, FileText,
   BarChart3, Target, Trash2, X, TrendingUp, TrendingDown,
   Download, AlertTriangle, Loader2, ChevronDown, ChevronUp,
-  Shield, Clock, ArrowUpRight, ArrowDownRight, Zap, Info,
+  Shield, Clock, ArrowUpRight, ArrowDownRight, Zap, Info, Rocket,
 } from 'lucide-react';
 import {
   fetchTrades, closeTrade, deleteTrade, calcPortfolioStats, computePnl,
@@ -115,12 +115,26 @@ const MODEL_CONFIG = {
     color: 'purple',
     icon: Shield,
   },
+  model_d_growth_focused: {
+    name: 'Model D',
+    subtitle: 'Growth Focused Trader',
+    color: 'rose',
+    icon: Rocket,
+  },
+  model_e_balanced_hunter: {
+    name: 'Model E',
+    subtitle: 'Balanced Edge Hunter',
+    color: 'amber',
+    icon: TrendingUp,
+  },
 };
 
 const MODEL_RULES = {
+  // Values kept in sync with Dashboard.jsx STRATEGIES array.
+  // entry_rules / exit_rules use the same numbers — what fires = what is displayed.
   model_a_disciplined: {
     name: 'Model A - Disciplined Edge Trader',
-    entry: { minEdge: '≥ 5.0%', minSignal: '≥ 60', profitTarget: '15%', stopLoss: '10%', maxPosition: '5% of capital', dailyLossCap: '5%' },
+    entry: { minEdge: '≥ 5.0%', minSignal: '≥ 65', profitTarget: '15%', stopLoss: '10%', maxPosition: '5% of capital', dailyLossCap: '5%' },
     exit: {
       profitTarget: 15,
       stopLoss: 10,
@@ -133,7 +147,7 @@ const MODEL_RULES = {
     },
   },
   model_b_high_frequency: {
-    name: 'Model B - High Frequency Hunter',
+    name: 'Model B - High Frequency Edge Hunter',
     entry: { minEdge: '≥ 3.0%', minSignal: '≥ 45', profitTarget: '8%', stopLoss: '6%', maxPosition: '4% of capital', dailyLossCap: '8%' },
     exit: {
       profitTarget: 8,
@@ -158,11 +172,57 @@ const MODEL_RULES = {
       trimEnabled: false,
     },
   },
+  model_d_growth_focused: {
+    name: 'Model D - Growth Focused Trader',
+    entry: { minEdge: '≥ 4.0%', minSignal: '≥ 55', profitTarget: '12%', stopLoss: '8%', maxPosition: '6% of capital', dailyLossCap: '6%' },
+    exit: {
+      profitTarget: 12,
+      stopLoss: 8,
+      edgeCompressionThreshold: 1.5,
+      timeBasedExitSeconds: 450,
+      trailingStopPercent: 4,
+      trimEnabled: true,
+      trimProfitTarget: 8,
+      trimPercentage: 40,
+    },
+  },
+  model_e_balanced_hunter: {
+    name: 'Model E - Balanced Edge Hunter',
+    entry: { minEdge: '≥ 4.5%', minSignal: '≥ 50', profitTarget: '10%', stopLoss: '7%', maxPosition: '4.5% of capital', dailyLossCap: '7%' },
+    exit: {
+      profitTarget: 10,
+      stopLoss: 7,
+      edgeCompressionThreshold: 1.2,
+      timeBasedExitSeconds: 360,
+      trailingStopPercent: 3.5,
+      trimEnabled: true,
+      trimProfitTarget: 7,
+      trimPercentage: 35,
+    },
+  },
+};
+
+// Robustly map any strategy string → canonical MODEL_RULES key.
+// The naive .replace(/ /g,'_') produced keys like "model_b_-_high_frequency_edge_hunter"
+// which never matched "model_b_high_frequency", so ALL models silently fell back to
+// model_a_disciplined — wrong rules for exit thresholds, entry display, AND checkAutoExits.
+const resolveStrategyId = (strategy) => {
+  if (!strategy) return 'model_a_disciplined';
+  const s = strategy.toLowerCase();
+  // Direct key match first (already canonical)
+  if (MODEL_RULES[s]) return s;
+  // Match by model letter or keyword — handles all display name variants
+  if (s.includes('model a') || s.includes('model_a') || s.includes('disciplined'))  return 'model_a_disciplined';
+  if (s.includes('model b') || s.includes('model_b') || s.includes('high freq'))    return 'model_b_high_frequency';
+  if (s.includes('model c') || s.includes('model_c') || s.includes('institutional')) return 'model_c_institutional';
+  if (s.includes('model d') || s.includes('model_d') || s.includes('growth'))       return 'model_d_growth_focused';
+  if (s.includes('model e') || s.includes('model_e') || s.includes('balanced'))     return 'model_e_balanced_hunter';
+  return 'model_a_disciplined';
 };
 
 const getStrategyInfo = (trade) => {
   if (!trade.strategy) return { name: trade.strategy, color: 'gray', rules: null };
-  const strategyId = trade.strategy.toLowerCase().replace(/ /g, '_');
+  const strategyId = resolveStrategyId(trade.strategy);
   const modelRules = MODEL_RULES[strategyId] || MODEL_RULES.model_a_disciplined;
   const config     = MODEL_CONFIG[strategyId] || { name: trade.strategy, color: 'gray' };
   return { name: config.name, subtitle: config.subtitle, color: config.color, rules: modelRules, strategyId };
@@ -182,8 +242,8 @@ const getEntryExitExplanation = (trade) => {
   const _x2       = _isNo2 ? 1 - _x2raw : _x2raw;
   const returnPct = _e2 > 0 ? ((_x2 - _e2) / _e2) * 100 : 0;
 
-  // Get model-specific rules for exit logic
-  const strategyId = trade.strategy ? trade.strategy.toLowerCase().replace(/ /g, '_') : 'model_a_disciplined';
+  // Get model-specific rules for exit logic (use resolveStrategyId — same fix as getStrategyInfo)
+  const strategyId = resolveStrategyId(trade.strategy);
   const modelRules = MODEL_RULES[strategyId] || MODEL_RULES.model_a_disciplined;
   const exitRules = modelRules.exit || {};
   const profitTarget = exitRules.profitTarget || 15;
@@ -739,54 +799,65 @@ const TradeDetailModal = ({ trade, onClose }) => {
             )}
 
             {/* Exit Condition Evaluation at Close */}
-            {closed && (
+            {closed && (() => {
+              const exitR  = trade.exit_reason || '';
+              const slPct  = strategyInfo?.rules?.exit?.stopLoss    || 10;
+              const ptPct  = strategyInfo?.rules?.exit?.profitTarget || 15;
+              const timeSec = strategyInfo?.rules?.exit?.timeBasedExitSeconds || 600;
+              // exit_reason is the authoritative source for which condition triggered.
+              // Float comparison alone is unreliable: stored exit_price may differ slightly
+              // from computed threshold, causing -10.0000007% to round to -9.99% in display.
+              const slHit = exitR.toLowerCase().includes('stop loss') || returnPct <= -(slPct - 0.001);
+              const ptHit = exitR.toLowerCase().includes('profit target') || returnPct >= (ptPct - 0.001);
+              const heldMs  = trade.timestamp && trade.closed_at
+                ? new Date(trade.closed_at) - new Date(trade.timestamp) : 0;
+              const heldMin = Math.floor(heldMs / 60000);
+              const heldSec = Math.floor((heldMs % 60000) / 1000);
+              // Show seconds for sub-minute holds (e.g. "15s") instead of "0min"
+              const timeLabel = heldMs === 0 ? 'N/A'
+                : heldMin === 0 ? `${heldSec}s`
+                : heldSec > 0 ? `${heldMin}m ${heldSec}s` : `${heldMin}min`;
+              const timeHit = heldMs / 1000 >= timeSec;
+              return (
               <div className="bg-purple-950/20 border border-purple-800/40 rounded-lg p-3 mb-4">
                 <p className="text-[10px] text-purple-500 uppercase tracking-wider mb-3 font-semibold">Exit Conditions at Close</p>
                 <div className="space-y-2 text-[10px]">
-                  {/* Profit Target Status */}
+                  {/* Profit Target */}
                   <div className="border-l-2 border-purple-600 pl-2 py-1">
                     <div className="flex items-center gap-2">
                       <p className="text-purple-400 font-semibold">Profit Target:</p>
-                      <p className="text-purple-300">{strategyInfo?.rules?.exit?.profitTarget || 15}%</p>
-                      <span className={`text-[9px] ${returnPct >= (strategyInfo?.rules?.exit?.profitTarget || 15) ? 'text-emerald-400' : 'text-gray-500'}`}>
-                        ({returnPct >= (strategyInfo?.rules?.exit?.profitTarget || 15) ? '✓ HIT' : '○ not hit'})
+                      <p className="text-purple-300">{ptPct}%</p>
+                      <span className={`text-[9px] ${ptHit ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        ({ptHit ? '✓ HIT' : '○ not hit'})
                       </span>
                     </div>
-                    {returnPct < (strategyInfo?.rules?.exit?.profitTarget || 15) && (
-                      <p className="text-gray-400 text-[9px] mt-1">Actual: {returnPct.toFixed(2)}%</p>
-                    )}
+                    {!ptHit && <p className="text-gray-400 text-[9px] mt-1">Actual: {returnPct.toFixed(2)}%</p>}
                   </div>
-
-                  {/* Stop Loss Status */}
+                  {/* Stop Loss */}
                   <div className="border-l-2 border-red-600 pl-2 py-1">
                     <div className="flex items-center gap-2">
                       <p className="text-red-400 font-semibold">Stop Loss:</p>
-                      <p className="text-red-300">{-(strategyInfo?.rules?.exit?.stopLoss || 10)}%</p>
-                      <span className={`text-[9px] ${returnPct <= -(strategyInfo?.rules?.exit?.stopLoss || 10) ? 'text-red-400' : 'text-gray-500'}`}>
-                        ({returnPct <= -(strategyInfo?.rules?.exit?.stopLoss || 10) ? '✓ HIT' : '○ not hit'})
+                      <p className="text-red-300">-{slPct}%</p>
+                      <span className={`text-[9px] ${slHit ? 'text-red-400' : 'text-gray-500'}`}>
+                        ({slHit ? '✓ HIT' : '○ not hit'})
                       </span>
                     </div>
-                    {returnPct > -(strategyInfo?.rules?.exit?.stopLoss || 10) && (
-                      <p className="text-gray-400 text-[9px] mt-1">Actual: {returnPct.toFixed(2)}%</p>
-                    )}
+                    {!slHit && <p className="text-gray-400 text-[9px] mt-1">Actual: {returnPct.toFixed(2)}%</p>}
                   </div>
-
-                  {/* Time-Based Exit Status */}
+                  {/* Time Exit — shows seconds for sub-minute holds */}
                   <div className="border-l-2 border-blue-600 pl-2 py-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-blue-400 font-semibold">Time Exit ({Math.round((strategyInfo?.rules?.exit?.timeBasedExitSeconds || 600) / 60)} min):</p>
-                      <p className="text-blue-300">{trade.timestamp && trade.closed_at 
-                        ? `${Math.floor((new Date(trade.closed_at) - new Date(trade.timestamp)) / 60000)}min`
-                        : 'N/A'}</p>
+                      <p className="text-blue-400 font-semibold">Time Exit ({Math.round(timeSec / 60)} min):</p>
+                      <p className={`text-blue-300 ${timeHit ? 'font-semibold' : ''}`}>{timeLabel}</p>
+                      {timeHit && <span className="text-[9px] text-blue-400">(✓ HIT)</span>}
                     </div>
                   </div>
-
-                  {/* Edge Compression Exit Status */}
+                  {/* Edge Compression */}
                   {strategyInfo?.rules?.exit?.edgeCompressionThreshold && (
                     <div className="border-l-2 border-cyan-600 pl-2 py-1">
                       <div className="flex items-center gap-2">
                         <p className="text-cyan-400 font-semibold">Edge Compression:</p>
-                        <p className="text-cyan-300">{"< " + (strategyInfo.rules.exit.edgeCompressionThreshold).toFixed(1)}%</p>
+                        <p className="text-cyan-300">{"< " + strategyInfo.rules.exit.edgeCompressionThreshold.toFixed(1)}%</p>
                         <span className={`text-[9px] ${trade.exit_edge && trade.exit_edge < strategyInfo.rules.exit.edgeCompressionThreshold ? 'text-cyan-400' : 'text-gray-500'}`}>
                           ({trade.exit_edge ? (trade.exit_edge < strategyInfo.rules.exit.edgeCompressionThreshold ? '✓ HIT' : '○ not hit') : 'N/A'})
                         </span>
@@ -795,7 +866,8 @@ const TradeDetailModal = ({ trade, onClose }) => {
                   )}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* P&L Momentum — for open trades */}
             {open && (
@@ -1634,8 +1706,8 @@ export default function TradesCenter() {
       (t.pnl || 0).toFixed(2),
       t.entry_price > 0 ? (((t.current_price - t.entry_price) / t.entry_price) * 100).toFixed(2) : '0',
       t.status,
-      t.timestamp ? new Date(t.timestamp).toLocaleString() : '',
-      t.closed_at ? new Date(t.closed_at).toLocaleString() : '',
+      t.timestamp ? new Date(t.timestamp).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '',
+      t.closed_at ? new Date(t.closed_at).toLocaleString('en-US', { timeZone: 'America/New_York' }) : '',
     ]);
     const csv = [headers, ...rows].map((r) => r.map((v) => `"${v ?? ''}"`).join(',')).join('\n');
     const a = document.createElement('a');
@@ -1773,12 +1845,12 @@ export default function TradesCenter() {
         {(() => {
           const openTrades = trades.filter(isOpen);
           const modelACount = openTrades.filter(t => {
-            const sid = (t.strategy || '').toLowerCase().replace(/ /g, '_');
-            return sid === 'model_a_disciplined' || sid.includes('model_a');
+            const sid = resolveStrategyId(t.strategy);
+            return sid === 'model_a_disciplined';
           }).length;
           const modelBCount = openTrades.filter(t => {
-            const sid = (t.strategy || '').toLowerCase().replace(/ /g, '_');
-            return sid === 'model_b_high_frequency' || sid.includes('model_b');
+            const sid = resolveStrategyId(t.strategy);
+            return sid === 'model_b_high_frequency';
           }).length;
           const aAtLimit = modelACount >= 10;
           const bAtLimit = modelBCount >= 10;

@@ -55,9 +55,9 @@ from models.game import Game, GameStatus, Team
 from models.market import Market
 from models.signal import Signal, SignalType
 from strategies.base_strategy import StrategyConfig, StrategyDecision, DecisionType
-from strategies.model_1_enhanced_clv import Model1EnhancedCLV
-from strategies.model_2_strong_favorite import Model2StrongFavorite
-
+from strategies.model_a_disciplined import ModelADisciplined
+from strategies.model_b_high_frequency import ModelBHighFrequency
+from strategies.model_c_institutional import ModelCInstitutional
 import services.decision_tracer as _dt_module  # patched to no-op during replay
 
 logging.basicConfig(
@@ -70,17 +70,20 @@ logger = logging.getLogger("replay")
 _TRACE_DIR    = _BACKEND / "logs" / "decision_traces"
 _CONFIG_DIR   = _BACKEND / "strategies" / "configs"
 _DEFAULT_CONFIGS: Dict[str, Path] = {
-    "1": _CONFIG_DIR / "model_1_enhanced_clv.json",
-    "2": _CONFIG_DIR / "model_2_strong_favorite.json",
+    "A": _CONFIG_DIR / "model_a.json",
+    "B": _CONFIG_DIR / "model_b.json",
+    "C": _CONFIG_DIR / "model_c.json",
 }
 _STRATEGY_CLASSES = {
-    "1": Model1EnhancedCLV,
-    "2": Model2StrongFavorite,
+    "A": ModelADisciplined,
+    "B": ModelBHighFrequency,
+    "C": ModelCInstitutional,
 }
 # Trace model_id prefix per letter
 _MODEL_ID_PREFIX: Dict[str, str] = {
-    "1": "model_1",
-    "2": "model_2",
+    "A": "model_a",
+    "B": "model_b",
+    "C": "model_c",
 }
 
 # ── Trace record ─────────────────────────────────────────────────────────────
@@ -428,7 +431,7 @@ def _load_traces(date_str: str, model_letter: str) -> List[TraceRecord]:
         )
         return []
 
-    prefix = _MODEL_ID_PREFIX.get(model_letter.upper(), "model_1")
+    prefix = _MODEL_ID_PREFIX.get(model_letter.upper(), "model_a")
     records: List[TraceRecord] = []
 
     with open(trace_path, "r", encoding="utf-8") as fh:
@@ -467,7 +470,7 @@ def _make_synthetic_records(
 
     rng = random.Random(42)
     base_ts = datetime.fromisoformat(f"{date_str}T19:00:00+00:00")
-    prefix  = _MODEL_ID_PREFIX.get(model_letter.upper(), "model_1")
+    prefix  = _MODEL_ID_PREFIX.get(model_letter.upper(), "model_a")
 
     records = []
     for i in range(n):

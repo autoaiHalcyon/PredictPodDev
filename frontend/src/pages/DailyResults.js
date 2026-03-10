@@ -15,6 +15,7 @@ import {
   X,
   Clock,
   DollarSign,
+  Rocket,
 } from "lucide-react";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || "";
@@ -50,6 +51,18 @@ const MODEL_CONFIG = {
     subtitle: "Institutional Risk-First",
     color: "purple",
     icon: Shield,
+  },
+  model_d_growth_focused: {
+    name: "Model D",
+    subtitle: "Growth Focused Trader",
+    color: "rose",
+    icon: Rocket,
+  },
+  model_e_balanced_hunter: {
+    name: "Model E",
+    subtitle: "Balanced Edge Hunter",
+    color: "amber",
+    icon: TrendingUp,
   },
 };
 
@@ -313,7 +326,7 @@ const DailyStatsCard = ({ strategyId, data, rules, onEditRules }) => {
               ))}
               {rules?.applied_at && (
                 <p className="text-xs text-muted-foreground mt-2 italic">
-                  Last updated: {new Date(rules.applied_at).toLocaleString()}
+                  Last updated: {new Date(rules.applied_at).toLocaleString('en-US', { timeZone: 'America/New_York' })}
                 </p>
               )}
             </div>
@@ -371,7 +384,7 @@ const TradeExecutionSummary = ({ trades }) => {
                 return (
                   <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="py-2 px-3 text-muted-foreground">
-                      {new Date(trade.timestamp).toLocaleTimeString()}
+                      {new Date(trade.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}
                     </td>
                     <td className="py-2 px-3 text-foreground">{trade.market_name || "—"}</td>
                     <td className="py-2 px-3 text-center text-blue-400 text-[10px]">

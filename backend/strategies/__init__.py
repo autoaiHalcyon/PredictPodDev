@@ -1,15 +1,22 @@
 """
-2-Model Strategy Engine — Master Rules v2.0
+Multi-Model Strategy Engine
 
-Model 1: Enhanced CLV          ($700 / 70%)
-Model 2: Strong Favorite Value ($300 / 30%)
+Provides parallel execution of multiple trading strategies:
+- Model A: Disciplined Edge Trader
+- Model B: High Frequency Edge Hunter  
+- Model C: Institutional Risk-First
 
-No other models. No deviations.
+Each strategy maintains independent:
+- Virtual capital
+- PnL tracking
+- Risk limits
+- Trade logs
 """
 from strategies.base_strategy import BaseStrategy, StrategyConfig, StrategyDecision, DecisionType
 from strategies.virtual_portfolio import VirtualPortfolio, VirtualPosition, VirtualTrade
-from strategies.model_1_enhanced_clv import Model1EnhancedCLV
-from strategies.model_2_strong_favorite import Model2StrongFavorite
+from strategies.model_a_disciplined import ModelADisciplined
+from strategies.model_b_high_frequency import ModelBHighFrequency
+from strategies.model_c_institutional import ModelCInstitutional
 from strategies.strategy_manager import StrategyEngineManager, strategy_manager
 
 __all__ = [
@@ -20,8 +27,9 @@ __all__ = [
     "VirtualPortfolio",
     "VirtualPosition",
     "VirtualTrade",
-    "Model1EnhancedCLV",
-    "Model2StrongFavorite",
+    "ModelADisciplined",
+    "ModelBHighFrequency",
+    "ModelCInstitutional",
     "StrategyEngineManager",
     "strategy_manager"
 ]

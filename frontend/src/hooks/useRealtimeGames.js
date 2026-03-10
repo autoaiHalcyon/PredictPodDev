@@ -14,7 +14,7 @@ const POLL_INTERVAL = 5000; // 5 seconds
 const API_BASE_URL =
   import.meta.env?.VITE_API_URL ||        // Vite env var (preferred)
   process.env?.REACT_APP_API_URL ||        // CRA env var
-  "https://beta.predictpod.co";           // production fallback
+  "https://alpha.predictpod.co";           // production fallback
 
 export default function useRealtimeGames(options = {}) {
   const {
@@ -133,23 +133,42 @@ export default function useRealtimeGames(options = {}) {
         const yesAsk = primary.yes_ask ?? null;
         const last   = primary.last_price ?? null;
 
-        // MARKET cents: last_price > mid > bid > ask > 50
+        // MARKET cents: live mid(bid+ask) > bid > ask > last_price > 50
+        // ✅ FIX: Prefer live bid/ask mid over last_price.
+        // last_price is the most recent TRADED price and can be hours old for
+        // low-volume markets. Entering at a stale last_price means the very first
+        // live poll shows a different price → trade opens with an instant P&L offset.
+        // bid/ask always reflects the live order book.
         const marketCents =
-          last != null
-            ? last
-            : yesBid != null && yesAsk != null
-              ? Math.round((yesBid + yesAsk) / 2)
-              : yesBid != null
-                ? yesBid
-                : yesAsk != null
-                  ? yesAsk
+          yesBid != null && yesAsk != null
+            ? Math.round((yesBid + yesAsk) / 2)  // live mid — always preferred
+            : yesBid != null
+              ? yesBid
+              : yesAsk != null
+                ? yesAsk
+                : last != null
+                  ? last                          // stale last_price — last resort only
                   : 50;
 
-        const fairCents  = 50;
-        const edgeCents  = marketCents - fairCents;
-        const marketDec  = marketCents / 100;
-        const fairDec    = fairCents / 100;
-        const edgeDec    = marketDec - fairDec;
+        const marketDec = marketCents / 100;
+
+        // ✅ FIX: Use real model probability from backend as fair value.
+        // Previously fairCents was hardcoded to 50, making edge = market - 50.
+        // That is NOT a tradeable edge — it just means "the market is not 50-50".
+        // The backend probability_engine.py calculates real win probabilities;
+        // the /api/kalshi/series endpoint should include fair_prob per market.
+        // We check s.fair_prob (series level) and m0/m1.fair_prob (market level).
+        // If the backend does not yet supply it, we fall back to marketDec (edge=0),
+        // which correctly prevents trading until a real signal exists.
+        const serverFairDec =
+          (s.fair_prob  != null ? s.fair_prob  :
+           m0.fair_prob != null ? m0.fair_prob :
+           m1.fair_prob != null ? m1.fair_prob : null);
+
+        const fairDec    = serverFairDec ?? marketDec;   // fallback → edge = 0, no phantom signal
+        const fairCents  = Math.round(fairDec * 100);
+        const edgeDec    = marketDec - fairDec;           // real edge: model says X, market says Y
+        const edgeCents  = edgeDec * 100;
 
         const status = s.is_closing ? "closed" : "open";
 
@@ -194,7 +213,11 @@ export default function useRealtimeGames(options = {}) {
               edgeDec >  0.03 ? "BUY"          :
               edgeDec < -0.05 ? "STRONG_SELL"  :
               edgeDec < -0.03 ? "SELL"         : "HOLD",
-            signal_score: Math.min(100, Math.abs(edgeDec) * 1000),
+            // ✅ FIX: signal_score scaled to [0,100] over a ±20% edge range.
+            // Old formula (abs(edge)*1000) gave score=100 for any edge > 0.1,
+            // making EVERY game with a price away from 50¢ score 100/100.
+            // New formula: 0% edge → score 0, 5% edge → score 25, 10% → 50, 20%+ → 100.
+            signal_score: Math.min(100, Math.abs(edgeDec) * 500),
             is_actionable: Math.abs(edgeDec) >= 0.03,
             risk_tier:
               Math.abs(edgeDec) > 0.07 ? "low" :

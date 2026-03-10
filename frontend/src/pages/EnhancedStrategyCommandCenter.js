@@ -83,6 +83,24 @@ const MODEL_CONFIG = {
     textClass: "text-purple-400",
     accentClass: "from-purple-500/20 to-purple-600/10",
   },
+  model_d_growth_focused: {
+    name: "Model D",
+    subtitle: "Growth Focused Trader",
+    color: "rose",
+    icon: Rocket,
+    bgClass: "bg-rose-500/10 border-rose-500/30",
+    textClass: "text-rose-400",
+    accentClass: "from-rose-500/20 to-rose-600/10",
+  },
+  model_e_balanced_hunter: {
+    name: "Model E",
+    subtitle: "Balanced Edge Hunter",
+    color: "amber",
+    icon: TrendingUp,
+    bgClass: "bg-amber-500/10 border-amber-500/30",
+    textClass: "text-amber-400",
+    accentClass: "from-amber-500/20 to-amber-600/10",
+  },
 };
 
 // Format currency
@@ -1742,6 +1760,12 @@ export default function EnhancedStrategyCommandCenter() {
                     </option>
                     <option value="model_c_institutional">
                       Model C - Institutional
+                    </option>
+                    <option value="model_d_growth_focused">
+                      Model D - Growth Focused
+                    </option>
+                    <option value="model_e_balanced_hunter">
+                      Model E - Balanced Hunter
                     </option>
                   </select>
                 </div>

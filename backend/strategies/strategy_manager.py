@@ -1,18 +1,11 @@
 """
-strategy_manager.py  —  PredictPod v2.1
-========================================
-IMPORTANT: This file PRESERVES the full existing StrategyEngineManager interface.
-The v2.1 changes ONLY update _load_strategies() to load Model 1 and Model 2
-instead of the old Model A/B/C configs.
+Strategy Engine Manager
 
-All existing attributes, methods, and the global `strategy_manager` singleton
-are fully preserved so server.py, routes, and the scheduler continue to work
-without any other changes.
-
-What changed in v2.1:
-  - _load_strategies() now instantiates Model1EnhancedCLV and Model2StrongFavorite
-  - Old ModelA/B/C imports replaced with new model imports
-  - model_1.json and model_2.json configs used instead of model_a/b/c.json
+Orchestrates multiple trading strategies running in parallel.
+- Single feed, broadcast to all strategies
+- Independent execution per strategy
+- Aggregated dashboard data
+- Kill switch control
 """
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime, date, timedelta
@@ -21,478 +14,463 @@ import asyncio
 import json
 import logging
 
-try:
-    from models.game import Game
-    from models.market import Market
-    from models.signal import Signal
-    from strategies.base_strategy import BaseStrategy, StrategyConfig, StrategyDecision, DecisionType
-except ImportError:
-    Game = Market = Signal = BaseStrategy = StrategyConfig = object
-    class DecisionType:
-        HOLD = "HOLD"; ENTER = "ENTER"
-    class StrategyDecision:
-        def __init__(self, **kw): self.__dict__.update(kw)
-
-# ── v2.1 model imports (replaces ModelA/B/C) ─────────────────────────────────
-from strategies.model_1_enhanced_clv import Model1EnhancedCLV
-from strategies.model_2_strong_favorite import Model2StrongFavorite
-# ─────────────────────────────────────────────────────────────────────────────
+from models.game import Game
+from models.market import Market
+from models.signal import Signal
+from strategies.base_strategy import BaseStrategy, StrategyConfig, StrategyDecision, DecisionType
+from strategies.model_a_disciplined import ModelADisciplined
+from strategies.model_b_high_frequency import ModelBHighFrequency
+from strategies.model_c_institutional import ModelCInstitutional
+from strategies.model_d_growth_focused import ModelDGrowthFocused
+from strategies.model_e_balanced_hunter import ModelEBalancedHunter
 
 logger = logging.getLogger(__name__)
 
+# Config directory
 CONFIG_DIR = Path(__file__).parent / "configs"
 
 
 class StrategyEngineManager:
     """
     Manages multiple trading strategies running in parallel.
-    Fully backward-compatible with existing server.py / routes / scheduler.
+    
+    Features:
+    - Single market feed, broadcast to all strategies
+    - Independent virtual portfolios per strategy
+    - Aggregated dashboard metrics
+    - Global kill switch
+    - Daily evaluation reports
     """
-
+    
     def __init__(self):
         self.strategies: Dict[str, BaseStrategy] = {}
         self._enabled = False
         self._kill_switch_active = False
         self._evaluation_mode = True
+        
+        # Decision loop timing
         self._last_tick_time: Optional[datetime] = None
-        self._tick_interval_seconds = 3
+        self._tick_interval_seconds = 3  # Process every 3 seconds
+        
+        # Daily reports
         self._daily_reports: Dict[str, Dict] = {}
+        
+        # Load strategies
         self._load_strategies()
-        logger.info("StrategyEngineManager initialized (v2.1 — Model 1 + Model 2)")
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # LOAD STRATEGIES  (v2.1: Model 1 + Model 2)
-    # ─────────────────────────────────────────────────────────────────────────
+        
+        logger.info("StrategyEngineManager initialized")
+    
     def _load_strategies(self):
+        """Load all strategy configurations and instantiate strategies.
+        
+        Active models: Model A + Model B + Model C + Model D + Model E enabled.
         """
-        v2.1: Load Model 1 (Enhanced CLV) and Model 2 (Strong Favorite Value).
-        Each model wraps itself in a StrategyConfig-compatible adapter so the
-        rest of the engine can treat them identically to the old Model A/B/C.
-        """
-        for model_class, config_file, model_id in [
-            (Model1EnhancedCLV, "model_1.json", "model_1_enhanced_clv"),
-            (Model2StrongFavorite, "model_2.json", "model_2_strong_favorite"),
-        ]:
-            config_path = CONFIG_DIR / config_file
+        strategy_configs = [
+            ("model_a_disciplined", ModelADisciplined),
+            ("model_b_high_frequency", ModelBHighFrequency),
+            ("model_c_institutional", ModelCInstitutional),
+            ("model_d_growth_focused", ModelDGrowthFocused),
+            ("model_e_balanced_hunter", ModelEBalancedHunter)
+        ]
+        
+        for config_name, strategy_class in strategy_configs:
+            config_path = CONFIG_DIR / f"{config_name.replace('_disciplined', '_a').replace('_high_frequency', '_b').replace('_institutional', '_c')}.json"
+            
+            # Try alternate naming
             if not config_path.exists():
-                logger.error(f"Config not found: {config_path} — skipping {model_id}")
-                continue
-            try:
-                model = model_class()
-                # Wrap in a lightweight adapter so existing code using
-                # strategy_manager.strategies[id].portfolio / .get_summary() works
-                adapter = _ModelAdapter(model, model_id, str(config_path))
-                self.strategies[model_id] = adapter
-                logger.info(f"Loaded strategy: {model_id}")
-            except Exception as e:
-                logger.error(f"Failed to load {model_id}: {e}", exc_info=True)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # CONTROL METHODS  (unchanged interface)
-    # ─────────────────────────────────────────────────────────────────────────
+                config_path = CONFIG_DIR / f"model_{config_name.split('_')[1][0]}.json"
+            
+            if config_path.exists():
+                try:
+                    config = StrategyConfig(str(config_path))
+                    # Skip if config marked as disabled
+                    if not config.enabled:
+                        logger.info(f"Skipping disabled strategy: {config.display_name}")
+                        continue
+                    strategy = strategy_class(config)
+                    self.strategies[config.model_id] = strategy
+                    logger.info(f"Loaded strategy: {config.display_name}")
+                except Exception as e:
+                    logger.error(f"Failed to load strategy {config_name}: {e}")
+            else:
+                logger.warning(f"Config not found: {config_path}")
+    
+    # ==========================================
+    # CONTROL METHODS
+    # ==========================================
+    
     def enable(self):
+        """Enable the strategy engine."""
         self._enabled = True
-        for s in self.strategies.values():
-            s.enable()
+        for strategy in self.strategies.values():
+            strategy.enable()
         logger.info("Strategy Engine ENABLED")
-
+    
     def disable(self):
+        """Disable the strategy engine."""
         self._enabled = False
-        for s in self.strategies.values():
-            s.disable()
+        for strategy in self.strategies.values():
+            strategy.disable()
         logger.info("Strategy Engine DISABLED")
-
+    
     def activate_kill_switch(self):
+        """Activate global kill switch - stops all strategies."""
         self._kill_switch_active = True
         self.disable()
-        logger.warning("KILL SWITCH ACTIVATED")
-
+        logger.warning("KILL SWITCH ACTIVATED - All strategies stopped")
+    
     def deactivate_kill_switch(self):
+        """Deactivate kill switch."""
         self._kill_switch_active = False
         logger.info("Kill switch deactivated")
-
+    
     def set_evaluation_mode(self, enabled: bool):
+        """Enable/disable evaluation mode."""
         self._evaluation_mode = enabled
         if enabled:
             self.enable()
-
+            logger.info("Evaluation Mode ENABLED - All strategies running")
+        else:
+            logger.info("Evaluation Mode DISABLED")
+    
     @property
-    def is_enabled(self):
+    def is_enabled(self) -> bool:
         return self._enabled and not self._kill_switch_active
-
+    
     @property
-    def is_kill_switch_active(self):
+    def is_kill_switch_active(self) -> bool:
         return self._kill_switch_active
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # TICK PROCESSING  (unchanged interface)
-    # ─────────────────────────────────────────────────────────────────────────
-    async def process_tick(self, game: Game, market: Market, signal: Signal,
-                           orderbook: Optional[Dict] = None) -> Dict:
+    
+    # ==========================================
+    # TICK PROCESSING
+    # ==========================================
+    
+    async def process_tick(
+        self,
+        game: Game,
+        market: Market,
+        signal: Signal,
+        orderbook: Optional[Dict] = None
+    ) -> Dict[str, Optional[StrategyDecision]]:
+        """
+        Process a market tick across all strategies.
+        
+        This is the main entry point - receives single feed,
+        broadcasts to all strategies.
+        
+        Returns dict of strategy_id -> decision
+        """
         if not self.is_enabled:
             return {}
+        
         self._last_tick_time = datetime.utcnow()
+        
         decisions = {}
-        for sid, strategy in self.strategies.items():
+        
+        # Process each strategy in parallel (but independent)
+        for strategy_id, strategy in self.strategies.items():
             try:
                 decision = strategy.process_tick(game, market, signal, orderbook)
-                decisions[sid] = decision
+                decisions[strategy_id] = decision
             except Exception as e:
-                logger.error(f"Strategy {sid} tick error: {e}")
-                decisions[sid] = None
+                logger.error(f"Strategy {strategy_id} error: {e}")
+                decisions[strategy_id] = None
+        
         return decisions
-
-    async def process_batch(self, ticks: List[Dict]) -> Dict:
-        all_decisions = {sid: [] for sid in self.strategies}
+    
+    async def process_batch(
+        self,
+        ticks: List[Dict]  # List of {game, market, signal, orderbook}
+    ) -> Dict[str, List[StrategyDecision]]:
+        """
+        Process multiple ticks (for multiple games).
+        """
+        all_decisions = {sid: [] for sid in self.strategies.keys()}
+        
         for tick in ticks:
-            decisions = await self.process_tick(**tick)
-            for sid, d in decisions.items():
-                if d and d.decision_type != DecisionType.HOLD:
-                    all_decisions[sid].append(d)
+            decisions = await self.process_tick(
+                game=tick.get("game"),
+                market=tick.get("market"),
+                signal=tick.get("signal"),
+                orderbook=tick.get("orderbook")
+            )
+            
+            for sid, decision in decisions.items():
+                if decision and decision.decision_type != DecisionType.HOLD:
+                    all_decisions[sid].append(decision)
+        
         return all_decisions
-
+    
     def update_position_prices(self, market_id: str, current_price: float):
-        for s in self.strategies.values():
-            if hasattr(s, 'portfolio'):
-                s.portfolio.update_position_price(market_id, current_price)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # DASHBOARD DATA  (unchanged interface)
-    # ─────────────────────────────────────────────────────────────────────────
+        """Update position prices across all strategies."""
+        for strategy in self.strategies.values():
+            strategy.portfolio.update_position_price(market_id, current_price)
+    
+    # ==========================================
+    # DASHBOARD DATA
+    # ==========================================
+    
     def get_summary(self) -> Dict:
-        summaries = {sid: s.get_summary() for sid, s in self.strategies.items()}
-        pnls = sorted([(sid, s.get("portfolio", {}).get("total_pnl", 0))
-                       for sid, s in summaries.items()], key=lambda x: x[1], reverse=True)
+        """Get aggregated summary for dashboard."""
+        summaries = {}
+        
+        for strategy_id, strategy in self.strategies.items():
+            summaries[strategy_id] = strategy.get_summary()
+        
+        # Find winning model
+        pnls = [(sid, s["portfolio"]["total_pnl"]) for sid, s in summaries.items()]
+        pnls_sorted = sorted(pnls, key=lambda x: x[1], reverse=True)
+        
+        winning_model = pnls_sorted[0][0] if pnls_sorted else None
+        
+        # Risk-adjusted winner (PnL / max_drawdown)
+        risk_adjusted = []
+        for sid, s in summaries.items():
+            pnl = s["portfolio"]["total_pnl"]
+            dd = max(s["portfolio"]["max_drawdown"], 1)  # Avoid div by 0
+            risk_adjusted.append((sid, pnl / dd))
+        risk_adjusted_sorted = sorted(risk_adjusted, key=lambda x: x[1], reverse=True)
+        best_risk_adjusted = risk_adjusted_sorted[0][0] if risk_adjusted_sorted else None
+        
         return {
             "enabled": self._enabled,
             "kill_switch_active": self._kill_switch_active,
             "evaluation_mode": self._evaluation_mode,
             "last_tick": self._last_tick_time.isoformat() if self._last_tick_time else None,
             "strategies": summaries,
-            "winning_model": pnls[0][0] if pnls else None,
-            "best_risk_adjusted": pnls[0][0] if pnls else None,
+            "winning_model": winning_model,
+            "best_risk_adjusted": best_risk_adjusted,
+            "comparison": self._build_comparison_table(summaries)
         }
-
-    def get_game_positions(self, game_id: str) -> Dict:
-        return {sid: s.portfolio.get_positions_for_game(game_id)
-                for sid, s in self.strategies.items()
-                if hasattr(s, 'portfolio')}
-
-    def get_all_positions_by_game(self) -> Dict:
-        result = {}
-        for sid, s in self.strategies.items():
-            if hasattr(s, 'portfolio'):
-                for pos in s.portfolio.get_all_positions():
-                    gid = getattr(pos, 'game_id', 'unknown')
-                    result.setdefault(gid, {})[sid] = pos
-        return result
-
-    def get_decision_logs(self, limit: int = 100) -> Dict:
-        return {sid: s.get_decision_log(limit)
-                for sid, s in self.strategies.items()}
-
-    def get_strategy_config(self, strategy_id: str) -> Optional[Dict]:
-        s = self.strategies.get(strategy_id)
-        return s.get_config() if s else None
-
+    
+    def _build_comparison_table(self, summaries: Dict) -> Dict:
+        """Build side-by-side comparison data."""
+        metrics = [
+            "total_pnl", "realized_pnl", "unrealized_pnl",
+            "total_trades", "win_rate", "avg_edge_entry",
+            "max_drawdown_pct", "risk_utilization"
+        ]
+        
+        comparison = {}
+        for metric in metrics:
+            comparison[metric] = {}
+            for sid, s in summaries.items():
+                value = s["portfolio"].get(metric, 0)
+                comparison[metric][sid] = value
+        
+        return comparison
+    
+    def get_game_positions(self, game_id: str) -> Dict[str, List[Dict]]:
+        """Get positions for a specific game across all strategies."""
+        positions = {}
+        
+        for strategy_id, strategy in self.strategies.items():
+            game_positions = strategy.portfolio.get_positions_for_game(game_id)
+            positions[strategy_id] = [p.to_dict() for p in game_positions]
+        
+        return positions
+    
+    def get_all_positions_by_game(self) -> Dict[str, Dict]:
+        """Get all positions organized by game for dashboard."""
+        games = {}
+        
+        for strategy_id, strategy in self.strategies.items():
+            for pos in strategy.portfolio.get_all_positions():
+                if pos.game_id not in games:
+                    games[pos.game_id] = {}
+                
+                games[pos.game_id][strategy_id] = {
+                    "has_position": True,
+                    "side": pos.side,
+                    "quantity": pos.quantity,
+                    "entry_price": pos.avg_entry_price,
+                    "current_price": pos.current_price,
+                    "unrealized_pnl": pos.unrealized_pnl,
+                    "status": "HOLD"
+                }
+        
+        # Fill in strategies without positions
+        for game_id in games:
+            for strategy_id in self.strategies:
+                if strategy_id not in games[game_id]:
+                    games[game_id][strategy_id] = {
+                        "has_position": False,
+                        "side": None,
+                        "quantity": 0,
+                        "entry_price": 0,
+                        "current_price": 0,
+                        "unrealized_pnl": 0,
+                        "status": "FLAT"
+                    }
+        
+        return games
+    
+    # ==========================================
+    # DECISION LOGS
+    # ==========================================
+    
+    def get_decision_logs(self, limit: int = 100) -> Dict[str, List[Dict]]:
+        """Get decision logs for all strategies."""
+        logs = {}
+        for strategy_id, strategy in self.strategies.items():
+            logs[strategy_id] = strategy.get_decision_log(limit)
+        return logs
+    
+    # ==========================================
+    # DAILY REPORTS
+    # ==========================================
+    
+    def generate_daily_report(self, date_str: Optional[str] = None) -> Dict:
+        """Generate daily evaluation report."""
+        if date_str is None:
+            date_str = date.today().isoformat()
+        
+        report = {
+            "date": date_str,
+            "generated_at": datetime.utcnow().isoformat(),
+            "strategies": {}
+        }
+        
+        for strategy_id, strategy in self.strategies.items():
+            daily_stats = strategy.portfolio.get_daily_stats(date_str)
+            league_stats = strategy.portfolio.get_stats_by_league()
+            
+            # Calculate profit factor
+            winners_pnl = sum(
+                t.pnl for t in strategy.portfolio._trades 
+                if t.direction == "sell" and t.is_winner
+            )
+            losers_pnl = abs(sum(
+                t.pnl for t in strategy.portfolio._trades 
+                if t.direction == "sell" and not t.is_winner
+            ))
+            profit_factor = winners_pnl / losers_pnl if losers_pnl > 0 else 0.0
+            
+            report["strategies"][strategy_id] = {
+                "display_name": strategy.display_name,
+                "daily_stats": daily_stats,
+                "total_pnl": strategy.portfolio.total_pnl,
+                "max_drawdown": strategy.portfolio.max_drawdown,
+                "max_drawdown_pct": strategy.portfolio.max_drawdown_pct,
+                "win_rate": strategy.portfolio.win_rate,
+                "profit_factor": round(profit_factor, 2),
+                "avg_edge_entry": strategy.portfolio.avg_edge_at_entry,
+                "avg_edge_exit": strategy.portfolio.avg_edge_at_exit,
+                "by_league": league_stats,
+                "trades_today": daily_stats.get("trades", 0)
+            }
+        
+        # Store for export
+        self._daily_reports[date_str] = report
+        
+        return report
+    
+    def export_daily_report_json(self, date_str: Optional[str] = None) -> str:
+        """Export daily report as JSON."""
+        if date_str is None:
+            date_str = date.today().isoformat()
+        
+        if date_str not in self._daily_reports:
+            self.generate_daily_report(date_str)
+        
+        return json.dumps(self._daily_reports[date_str], indent=2)
+    
+    def export_daily_report_csv(self, date_str: Optional[str] = None) -> str:
+        """Export daily report as CSV."""
+        if date_str is None:
+            date_str = date.today().isoformat()
+        
+        if date_str not in self._daily_reports:
+            self.generate_daily_report(date_str)
+        
+        report = self._daily_reports[date_str]
+        
+        # Build CSV
+        headers = [
+            "strategy_id", "display_name", "pnl", "max_drawdown",
+            "win_rate", "profit_factor", "trades", "avg_edge_entry"
+        ]
+        lines = [",".join(headers)]
+        
+        for sid, data in report["strategies"].items():
+            row = [
+                sid,
+                data["display_name"],
+                str(round(data["total_pnl"], 2)),
+                str(round(data["max_drawdown"], 2)),
+                str(round(data["win_rate"], 1)),
+                str(data["profit_factor"]),
+                str(data["trades_today"]),
+                str(round(data["avg_edge_entry"] * 100, 2))
+            ]
+            lines.append(",".join(row))
+        
+        return "\n".join(lines)
+    
+    # ==========================================
+    # PORTFOLIO MANAGEMENT
+    # ==========================================
+    
+    def reset_strategy(self, strategy_id: str, starting_capital: Optional[float] = None):
+        """Reset a specific strategy's portfolio."""
+        if strategy_id in self.strategies:
+            self.strategies[strategy_id].reset_portfolio(starting_capital)
+            logger.info(f"Strategy {strategy_id} portfolio reset")
+    
+    def reset_all_strategies(self):
+        """Reset all strategy portfolios."""
+        for strategy in self.strategies.values():
+            strategy.reset_portfolio()
+        logger.info("All strategy portfolios reset")
+    
+    def export_trades_csv(self, strategy_id: str) -> str:
+        """Export trades for a specific strategy."""
+        if strategy_id in self.strategies:
+            return self.strategies[strategy_id].portfolio.export_trades_csv()
+        return ""
+    
+    def export_trades_json(self, strategy_id: str) -> str:
+        """Export trades for a specific strategy."""
+        if strategy_id in self.strategies:
+            return self.strategies[strategy_id].portfolio.export_trades_json()
+        return "[]"
+    
+    # ==========================================
+    # CONFIGURATION
+    # ==========================================
+    
     def reload_configs(self):
-        for s in self.strategies.values():
-            if hasattr(s, 'config') and hasattr(s.config, 'reload'):
-                s.config.reload()
-        logger.info("Strategy configs reloaded")
-
+        """Reload all strategy configurations."""
+        for strategy in self.strategies.values():
+            strategy.config.reload()
+        logger.info("All strategy configs reloaded")
+    
+    def get_strategy_config(self, strategy_id: str) -> Optional[Dict]:
+        """Get config for a specific strategy."""
+        if strategy_id in self.strategies:
+            return self.strategies[strategy_id].config._config
+        return None
+    
     def update_strategy_config(self, strategy_id: str, updates: Dict) -> bool:
-        s = self.strategies.get(strategy_id)
-        if not s:
+        """Update strategy config (runtime only, doesn't persist)."""
+        if strategy_id not in self.strategies:
             return False
-        if hasattr(s, 'config') and hasattr(s.config, '_config'):
-            s.config._config.update(updates)
+        
+        config = self.strategies[strategy_id].config._config
+        
+        # Deep merge updates
+        def deep_merge(base: Dict, updates: Dict):
+            for key, value in updates.items():
+                if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                    deep_merge(base[key], value)
+                else:
+                    base[key] = value
+        
+        deep_merge(config, updates)
+        logger.info(f"Strategy {strategy_id} config updated (runtime)")
+        
         return True
 
-    def reset_strategy(self, strategy_id: str, starting_capital: float = None):
-        s = self.strategies.get(strategy_id)
-        if s and hasattr(s, 'portfolio'):
-            s.portfolio.reset(starting_capital or 10000.0)
 
-    def reset_all_strategies(self):
-        for s in self.strategies.values():
-            if hasattr(s, 'portfolio'):
-                s.portfolio.reset()
-
-    def export_trades_csv(self, strategy_id: str) -> str:
-        s = self.strategies.get(strategy_id)
-        if s and hasattr(s, 'portfolio'):
-            return s.portfolio.export_trades_csv()
-        return ""
-
-    def export_trades_json(self, strategy_id: str) -> str:
-        s = self.strategies.get(strategy_id)
-        if s and hasattr(s, 'portfolio'):
-            return s.portfolio.export_trades_json()
-        return "[]"
-
-    def export_daily_report_json(self, date_str: str = None) -> str:
-        return json.dumps({"date": date_str, "strategies": self.get_summary()})
-
-    def export_daily_report_csv(self, date_str: str = None) -> str:
-        return f"date,strategy,pnl\n{date_str or 'today'},combined,0"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CONFIG SHIM
-# Mimics StrategyConfig so server.py can access strategy.config._config
-# and strategy.config.reload() without modification
-# ─────────────────────────────────────────────────────────────────────────────
-class _ConfigShim:
-    """
-    Drop-in replacement for StrategyConfig used by _ModelAdapter.
-    Exposes ._config (dict), .reload(), .get(), and common properties
-    so server.py / config_version_service work without any changes.
-    """
-
-    def __init__(self, config_path: str, model_id: str):
-        self.config_path = config_path
-        self._model_id = model_id
-        self._config: Dict = {}
-        self.load()
-
-    def load(self):
-        try:
-            with open(self.config_path) as f:
-                self._config = json.load(f)
-            # Ensure required fields exist for StrategyConfig compatibility
-            self._config.setdefault("model_id", self._model_id)
-            self._config.setdefault("display_name", self._model_id.replace("_", " ").title())
-            self._config.setdefault("enabled", True)
-            self._config.setdefault("starting_capital", 10000.0)
-        except Exception as e:
-            logger.error(f"_ConfigShim failed to load {self.config_path}: {e}")
-            self._config = {
-                "model_id": self._model_id,
-                "display_name": self._model_id.replace("_", " ").title(),
-                "enabled": True,
-                "starting_capital": 10000.0,
-            }
-
-    def reload(self):
-        self.load()
-
-    def get(self, key: str, default=None):
-        keys = key.split(".")
-        val = self._config
-        for k in keys:
-            if isinstance(val, dict):
-                val = val.get(k)
-            else:
-                return default
-            if val is None:
-                return default
-        return val
-
-    # Properties matching StrategyConfig interface
-    @property
-    def model_id(self) -> str:
-        return self._config.get("model_id", self._model_id)
-
-    @property
-    def display_name(self) -> str:
-        return self._config.get("display_name", self._model_id)
-
-    @property
-    def enabled(self) -> bool:
-        return self._config.get("enabled", True)
-
-    @property
-    def starting_capital(self) -> float:
-        return self._config.get("starting_capital", 10000.0)
-
-    @property
-    def entry_rules(self) -> Dict:
-        return self._config.get("entry_rules", self._config.get("parameters", {}))
-
-    @property
-    def exit_rules(self) -> Dict:
-        return self._config.get("exit_rules", {})
-
-    @property
-    def position_sizing(self) -> Dict:
-        return self._config.get("position_sizing", {})
-
-    @property
-    def risk_limits(self) -> Dict:
-        return self._config.get("risk_limits", {})
-
-    @property
-    def filters(self) -> Dict:
-        return self._config.get("filters", {})
-
-    @property
-    def circuit_breakers(self) -> Dict:
-        return self._config.get("circuit_breaker", {})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LIGHTWEIGHT ADAPTER
-# Wraps Model1/Model2 so StrategyEngineManager can treat them like BaseStrategy
-# ─────────────────────────────────────────────────────────────────────────────
-class _ModelAdapter:
-    """
-    Bridges the new standalone Model 1/2 classes into the StrategyEngineManager
-    interface. Provides .portfolio, .get_summary(), .process_tick(), etc.
-    """
-
-    def __init__(self, model, model_id: str, config_path: str):
-        self._model = model
-        self.strategy_id = model_id
-        self.display_name = model_id.replace("_", " ").title()
-        self._enabled = True
-        self._decision_log: List[Dict] = []
-        self._config_path = config_path
-
-        # Minimal portfolio shim so strategy_manager.strategies[id].portfolio works
-        self.portfolio = _PortfolioShim(model)
-
-        # config object — server.py accesses strategy.config._config and strategy.config.reload()
-        self.config = _ConfigShim(config_path, model_id)
-
-    def enable(self):
-        self._enabled = True
-        self._model.enable()
-
-    def disable(self):
-        self._enabled = False
-        self._model.disable()
-
-    def process_tick(self, game, market, signal, orderbook=None) -> Optional[StrategyDecision]:
-        """
-        Bridge process_tick() to the model's evaluate_entry().
-        Extracts the fields Model 1/2 need from the Game/Market/Signal objects.
-        """
-        if not self._enabled:
-            return None
-        try:
-            from strategies.model_1_enhanced_clv import Model1EnhancedCLV
-            from strategies.model_2_strong_favorite import Model2StrongFavorite
-
-            # Extract common fields
-            yes_price   = getattr(market, 'yes_price', None) or getattr(market, 'yes_ask', 0.5)
-            sharp_line  = getattr(signal, 'fair_prob', yes_price)
-            age_min     = getattr(market, 'age_minutes', 120)
-            mins_to_tip = getattr(signal, 'mins_until_game', 120)
-            volume      = getattr(market, 'volume', 5000)
-            spread      = abs(getattr(market, 'yes_ask', yes_price) -
-                              getattr(market, 'yes_bid', yes_price))
-            game_id     = getattr(game, 'id', 'unknown')
-
-            if isinstance(self._model, Model1EnhancedCLV):
-                decision = self._model.evaluate_entry(
-                    game_id=game_id,
-                    kalshi_yes_price=yes_price,
-                    sharp_line=sharp_line,
-                    market_age_min=age_min,
-                    mins_until_game=mins_to_tip,
-                    volume=volume,
-                    spread=spread,
-                )
-                if decision.decision == "ENTER":
-                    return StrategyDecision(
-                        decision_type=DecisionType.ENTER,
-                        reason=decision.reason,
-                        market_id=getattr(market, 'id', ''),
-                        game_id=game_id,
-                        side=decision.direction or "YES",
-                        quantity=decision.contracts,
-                        price=decision.entry_price or yes_price,
-                        edge=decision.edge,
-                    )
-
-            elif isinstance(self._model, Model2StrongFavorite):
-                home_r = getattr(game, 'home_team_rating', 60.0)
-                away_r = getattr(game, 'away_team_rating', 60.0)
-                decision = self._model.evaluate_entry(
-                    game_id=game_id,
-                    home_rating=home_r,
-                    away_rating=away_r,
-                    kalshi_yes_price=yes_price,
-                    sharp_line=sharp_line,
-                    mins_until_game=mins_to_tip,
-                    volume=volume,
-                    spread=spread,
-                )
-                if decision.decision == "ENTER":
-                    return StrategyDecision(
-                        decision_type=DecisionType.ENTER,
-                        reason=decision.reason,
-                        market_id=getattr(market, 'id', ''),
-                        game_id=game_id,
-                        side="YES",
-                        quantity=decision.contracts,
-                        price=decision.entry_price or yes_price,
-                        edge=decision.edge,
-                    )
-        except Exception as e:
-            logger.error(f"[{self.strategy_id}] process_tick error: {e}", exc_info=True)
-        return None
-
-    def get_summary(self) -> Dict:
-        status = self._model.get_status()
-        return {
-            "strategy_id":   self.strategy_id,
-            "display_name":  self.display_name,
-            "enabled":       self._enabled,
-            "portfolio": {
-                "total_pnl":    status.get("session_pnl", 0),
-                "realized_pnl": status.get("session_pnl", 0),
-                "unrealized_pnl": 0,
-                "total_trades": status.get("trade_count", 0),
-                "win_rate":     0,
-                "max_drawdown": 0,
-                "max_drawdown_pct": 0,
-                "risk_utilization": 0,
-            },
-        }
-
-    def get_decision_log(self, limit: int = 100) -> List:
-        return self._decision_log[-limit:]
-
-    def get_positions_summary(self) -> List:
-        return []
-
-    def get_config(self) -> Dict:
-        return self.config._config
-
-
-class _PortfolioShim:
-    """Minimal portfolio shim so .portfolio access doesn't crash."""
-
-    def __init__(self, model):
-        self._model = model
-
-    def get_positions_for_game(self, game_id: str) -> List:
-        return []
-
-    def get_all_positions(self) -> List:
-        return []
-
-    def update_position_price(self, market_id: str, price: float):
-        pass
-
-    def reset(self, starting_capital: float = 10000.0):
-        pass
-
-    def export_trades_csv(self) -> str:
-        return ""
-
-    def export_trades_json(self) -> str:
-        return "[]"
-
-    @property
-    def total_pnl(self) -> float:
-        return self._model.get_status().get("session_pnl", 0)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Global singleton — imported by server.py, routes, scheduler as:
-#   from strategies.strategy_manager import StrategyEngineManager, strategy_manager
-# ─────────────────────────────────────────────────────────────────────────────
+# Global instance
 strategy_manager = StrategyEngineManager()

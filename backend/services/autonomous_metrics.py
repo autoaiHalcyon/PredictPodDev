@@ -133,8 +133,9 @@ class AutonomousMetricsService:
         
         # Per-model tracking
         self._model_metrics: Dict[str, Dict] = {
-            "model_1": {"trades": 0, "pnl": 0.0, "signals": 0},
-            "model_2": {"trades": 0, "pnl": 0.0, "signals": 0}
+            "model_a_disciplined": {"trades": 0, "pnl": 0.0, "signals": 0},
+            "model_b_high_frequency": {"trades": 0, "pnl": 0.0, "signals": 0},
+            "model_c_institutional": {"trades": 0, "pnl": 0.0, "signals": 0}
         }
         
         # Ensure log directory exists

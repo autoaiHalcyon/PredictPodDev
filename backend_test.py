@@ -11,7 +11,7 @@ import time
 from typing import Dict, Any, Optional, List
 
 # Backend URL from frontend .env
-BASE_URL = "https://portfolio-unified.preview.emergentagent.com/api"
+BASE_URL = "https://predict-strategy-hub.preview.emergentagent.com/api"
 
 class PredictPodAPITester:
     def __init__(self):

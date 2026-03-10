@@ -20,6 +20,7 @@ from routes.trades import router as trades_router
 from routes.auth import router as auth_router, set_auth_service
 from routes.decisions import router as decisions_router
 from routes.debug import router as debug_router
+from routes.strategies import router as strategies_router, set_strategy_repo
 from services.log_sanitizer import install_log_sanitizer
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
@@ -78,6 +79,9 @@ order_lifecycle_service = None
 user_repo: UserRepository = None
 reset_token_repo: PasswordResetTokenRepository = None
 auth_service: AuthService = None
+
+# Strategy management globals
+strategy_repo = None
 
 # Application start time for uptime tracking
 app_start_time: datetime = None
@@ -256,6 +260,7 @@ async def lifespan(app: FastAPI):
     global prob_engine, signal_engine, trade_engine, risk_engine, portfolio_service
     global kalshi_settings_service, order_lifecycle_service
     global user_repo, reset_token_repo, auth_service
+    global strategy_repo
     global app_start_time
     global db  # Add db to global scope
     
@@ -297,6 +302,27 @@ async def lifespan(app: FastAPI):
     auth_service = AuthService(user_repo, reset_token_repo)
     set_auth_service(auth_service)
     logger.info("Authentication service initialized")
+    
+    # Initialize strategy repository for dynamic strategy management
+    from repositories.strategy_repository import StrategyRepository
+    strategy_repo = StrategyRepository(db)
+    await strategy_repo.create_indexes()
+    set_strategy_repo(strategy_repo)
+    
+    # Seed default strategies from JSON configs
+    from pathlib import Path
+    config_dir = Path(__file__).parent / "strategies" / "configs"
+    default_configs = {}
+    for config_file in ["model_a.json", "model_b.json", "model_c.json", "model_d.json", "model_e.json"]:
+        config_path = config_dir / config_file
+        if config_path.exists():
+            import json as json_lib
+            with open(config_path, 'r') as f:
+                config = json_lib.load(f)
+                default_configs[config.get("model_id", config_file.replace(".json", ""))] = config
+    
+    await strategy_repo.seed_default_strategies(default_configs)
+    logger.info("Strategy repository initialized")
     
     # Initialize Kalshi settings service
     kalshi_settings_service = KalshiSettingsService(settings_repo)
@@ -3161,4 +3187,5 @@ app.include_router(auth_router)
 app.include_router(trades_router)
 app.include_router(decisions_router)
 app.include_router(debug_router)
+app.include_router(strategies_router)
 app.include_router(api_router)

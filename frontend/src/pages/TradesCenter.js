@@ -96,7 +96,8 @@ const isClosed = (t) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
-const MODEL_CONFIG = {
+// MODEL CONFIG - Supports both default and user-created strategies
+const DEFAULT_MODEL_CONFIG = {
   model_a_disciplined: {
     name: 'Model A',
     subtitle: 'Disciplined Edge Trader',
@@ -127,6 +128,24 @@ const MODEL_CONFIG = {
     color: 'amber',
     icon: TrendingUp,
   },
+};
+
+// Color palette for user-created strategies
+const USER_STRATEGY_COLORS = ['cyan', 'orange', 'pink', 'lime', 'indigo'];
+
+// Get display config for any strategy (supports user-created strategies)
+const getModelConfig = (strategyId, displayName = '', index = 0) => {
+  if (DEFAULT_MODEL_CONFIG[strategyId]) {
+    return DEFAULT_MODEL_CONFIG[strategyId];
+  }
+  // For user strategies, use display name and rotating colors
+  const color = USER_STRATEGY_COLORS[index % USER_STRATEGY_COLORS.length];
+  return {
+    name: displayName || strategyId,
+    subtitle: 'Custom Strategy',
+    color: color,
+    icon: Zap,
+  };
 };
 
 const MODEL_RULES = {
@@ -224,7 +243,7 @@ const getStrategyInfo = (trade) => {
   if (!trade.strategy) return { name: trade.strategy, color: 'gray', rules: null };
   const strategyId = resolveStrategyId(trade.strategy);
   const modelRules = MODEL_RULES[strategyId] || MODEL_RULES.model_a_disciplined;
-  const config     = MODEL_CONFIG[strategyId] || { name: trade.strategy, color: 'gray' };
+  const config     = getModelConfig(strategyId, trade.strategy_display_name || trade.strategy);
   return { name: config.name, subtitle: config.subtitle, color: config.color, rules: modelRules, strategyId };
 };
 
@@ -315,8 +334,8 @@ const MiniBar = ({ value, max }) => {
 // DAILY STATS CARD
 // ─────────────────────────────────────────────────────────────────────────────
 const DailyStatsCard = ({ strategyId, data }) => {
-  const config = MODEL_CONFIG[strategyId] || { name: strategyId, subtitle: '', icon: Activity };
-  const Icon = config.icon;
+  const config = getModelConfig(strategyId, data?.display_name || strategyId);
+  const Icon = config.icon || Activity;
   const totalPnl   = data?.total_pnl || 0;
   const dailyStats = data?.daily_stats || {};
   return (

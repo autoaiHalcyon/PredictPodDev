@@ -20,7 +20,7 @@ import os
 import time
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://portfolio-unified.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://predict-strategy-hub.preview.emergentagent.com')
 
 
 @pytest.fixture(scope="session")

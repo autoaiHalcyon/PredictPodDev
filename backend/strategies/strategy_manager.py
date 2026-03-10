@@ -28,6 +28,37 @@ logger = logging.getLogger(__name__)
 
 # Config directory
 CONFIG_DIR = Path(__file__).parent / "configs"
+GENERATED_CONFIG_DIR = CONFIG_DIR / "generated"
+
+# Strategy class mapping
+STRATEGY_CLASS_MAP = {
+    "model_a": ModelADisciplined,
+    "model_b": ModelBHighFrequency,
+    "model_c": ModelCInstitutional,
+    "model_d": ModelDGrowthFocused,
+    "model_e": ModelEBalancedHunter,
+    "model_a_disciplined": ModelADisciplined,
+    "model_b_high_frequency": ModelBHighFrequency,
+    "model_c_institutional": ModelCInstitutional,
+    "model_d_growth_focused": ModelDGrowthFocused,
+    "model_e_balanced_hunter": ModelEBalancedHunter,
+}
+
+
+def resolve_strategy_class(model_id: str):
+    """Resolve model_id to strategy class."""
+    # Try direct match first
+    if model_id in STRATEGY_CLASS_MAP:
+        return STRATEGY_CLASS_MAP[model_id]
+    
+    # Try prefix match (model_a, model_b, etc.)
+    model_id_lower = model_id.lower()
+    for key in ["model_a", "model_b", "model_c", "model_d", "model_e"]:
+        if model_id_lower.startswith(key):
+            return STRATEGY_CLASS_MAP[key]
+    
+    # Default to Model A
+    return ModelADisciplined
 
 
 class StrategyEngineManager:
@@ -63,9 +94,11 @@ class StrategyEngineManager:
     def _load_strategies(self):
         """Load all strategy configurations and instantiate strategies.
         
-        Active models: Model A + Model B + Model C + Model D + Model E enabled.
+        First loads default models (A-E), then loads user-created strategies
+        from the generated configs directory.
         """
-        strategy_configs = [
+        # Default strategy configs
+        default_configs = [
             ("model_a_disciplined", ModelADisciplined),
             ("model_b_high_frequency", ModelBHighFrequency),
             ("model_c_institutional", ModelCInstitutional),
@@ -73,7 +106,8 @@ class StrategyEngineManager:
             ("model_e_balanced_hunter", ModelEBalancedHunter)
         ]
         
-        for config_name, strategy_class in strategy_configs:
+        # Load default strategies
+        for config_name, strategy_class in default_configs:
             config_path = CONFIG_DIR / f"{config_name.replace('_disciplined', '_a').replace('_high_frequency', '_b').replace('_institutional', '_c')}.json"
             
             # Try alternate naming
@@ -89,11 +123,57 @@ class StrategyEngineManager:
                         continue
                     strategy = strategy_class(config)
                     self.strategies[config.model_id] = strategy
-                    logger.info(f"Loaded strategy: {config.display_name}")
+                    logger.info(f"Loaded default strategy: {config.display_name}")
                 except Exception as e:
                     logger.error(f"Failed to load strategy {config_name}: {e}")
             else:
                 logger.warning(f"Config not found: {config_path}")
+        
+        # Load user-created strategies from generated configs
+        self._load_generated_strategies()
+    
+    def _load_generated_strategies(self):
+        """Load user-created strategies from generated configs directory."""
+        if not GENERATED_CONFIG_DIR.exists():
+            GENERATED_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            return
+        
+        loaded_count = 0
+        for config_file in GENERATED_CONFIG_DIR.glob("*.json"):
+            try:
+                with open(config_file, 'r') as f:
+                    config_data = json.load(f)
+                
+                # Skip if already loaded (default strategies)
+                strategy_key = config_file.stem
+                model_id = config_data.get("model_id", "model_a_disciplined")
+                
+                if model_id in self.strategies:
+                    continue
+                
+                # Skip if disabled
+                if not config_data.get("enabled", True):
+                    logger.info(f"Skipping disabled user strategy: {config_data.get('display_name', strategy_key)}")
+                    continue
+                
+                # Get strategy class based on model_id
+                strategy_class = resolve_strategy_class(model_id)
+                
+                # Create config and strategy
+                config = StrategyConfig(str(config_file))
+                strategy = strategy_class(config)
+                
+                # Use strategy_key as identifier if it's a user-created strategy
+                identifier = strategy_key if strategy_key not in self.strategies else model_id
+                self.strategies[identifier] = strategy
+                loaded_count += 1
+                logger.info(f"Loaded user strategy: {config.display_name} ({identifier})")
+                
+            except Exception as e:
+                logger.error(f"Failed to load generated strategy {config_file}: {e}")
+        
+        if loaded_count > 0:
+            logger.info(f"Loaded {loaded_count} user-created strategies")
     
     # ==========================================
     # CONTROL METHODS
@@ -440,9 +520,14 @@ class StrategyEngineManager:
     # ==========================================
     
     def reload_configs(self):
-        """Reload all strategy configurations."""
+        """Reload all strategy configurations including user-created strategies."""
+        # Reload existing strategy configs
         for strategy in self.strategies.values():
             strategy.config.reload()
+        
+        # Also reload any new generated strategies
+        self._load_generated_strategies()
+        
         logger.info("All strategy configs reloaded")
     
     def get_strategy_config(self, strategy_id: str) -> Optional[Dict]:

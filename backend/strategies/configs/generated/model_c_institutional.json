@@ -1,0 +1,74 @@
+{
+  "model_id": "model_c_institutional",
+  "display_name": "Model C - Institutional Risk-First",
+  "description": "Highest requirements, strong filters, most conservative sizing",
+  "enabled": true,
+  "starting_capital": 10000.0,
+  "currency": "USD",
+  "entry_rules": {
+    "min_edge_threshold": 0.07,
+    "min_signal_score": 75,
+    "min_persistence_ticks": 4,
+    "max_entries_per_game": 2,
+    "cooldown_seconds": 300,
+    "require_positive_momentum": true
+  },
+  "exit_rules": {
+    "edge_compression_exit_threshold": 0.03,
+    "profit_target_pct": 0.2,
+    "stop_loss_pct": 0.08,
+    "time_based_exit_seconds": 900,
+    "trailing_stop_pct": 0.04
+  },
+  "position_sizing": {
+    "base_size_pct": 0.01,
+    "max_position_pct": 0.03,
+    "kelly_fraction": 0.15,
+    "scale_with_edge": true,
+    "edge_scale_factor": 1.5
+  },
+  "risk_limits": {
+    "max_daily_loss_pct": 0.03,
+    "max_exposure_pct": 0.1,
+    "max_trades_per_hour": 2,
+    "max_trades_per_day": 10,
+    "max_trades_per_game": 2,
+    "max_drawdown_pct": 0.06
+  },
+  "filters": {
+    "min_liquidity_contracts": 100,
+    "max_spread_pct": 0.03,
+    "volatility_regime_allowed": [
+      "low"
+    ],
+    "min_game_progress": 0.2,
+    "max_game_progress": 0.9,
+    "allowed_leagues": [
+      "NBA",
+      "NCAA_M",
+      "NCAA_W"
+    ],
+    "require_strong_liquidity": true,
+    "min_volume_24h": 1000
+  },
+  "trim_rules": {
+    "enable_trim": false,
+    "trim_at_profit_pct": 0.15,
+    "trim_size_pct": 0.4,
+    "trim_on_edge_decay": false,
+    "edge_decay_threshold": 0.04
+  },
+  "circuit_breakers": {
+    "pause_on_consecutive_losses": 2,
+    "pause_duration_seconds": 900,
+    "pause_on_drawdown_pct": 0.03,
+    "auto_resume": false,
+    "require_manual_reset": true
+  },
+  "adverse_move_protection": {
+    "enable_hard_stop": true,
+    "hard_stop_pct": 0.05,
+    "enable_time_stop": true,
+    "max_adverse_time_seconds": 120
+  }
+}

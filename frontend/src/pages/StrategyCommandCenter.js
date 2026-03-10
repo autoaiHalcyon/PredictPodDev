@@ -4,6 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "../components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "../components/ui/select";
 import {
   ArrowLeft,
   Play,
@@ -22,14 +31,19 @@ import {
   Crown,
   Medal,
   Settings,
-  Rocket
+  Rocket,
+  Plus,
+  Copy,
+  Edit,
+  Trash2,
+  X
 } from "lucide-react";
 import { RulesDrawer, RuleChips } from "../components/RulesDrawer";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || "";
 
-// Model display config
-const MODEL_CONFIG = {
+// Default model display config (for base models)
+const DEFAULT_MODEL_CONFIG = {
   model_a_disciplined: {
     name: "Model A",
     subtitle: "Disciplined Edge Trader",
@@ -72,6 +86,41 @@ const MODEL_CONFIG = {
   }
 };
 
+// Color palette for user-created strategies
+const USER_STRATEGY_COLORS = [
+  { color: "cyan", bgClass: "bg-cyan-500/10 border-cyan-500/30", textClass: "text-cyan-400" },
+  { color: "orange", bgClass: "bg-orange-500/10 border-orange-500/30", textClass: "text-orange-400" },
+  { color: "pink", bgClass: "bg-pink-500/10 border-pink-500/30", textClass: "text-pink-400" },
+  { color: "lime", bgClass: "bg-lime-500/10 border-lime-500/30", textClass: "text-lime-400" },
+  { color: "indigo", bgClass: "bg-indigo-500/10 border-indigo-500/30", textClass: "text-indigo-400" },
+];
+
+// Get config for a strategy (supports both default and user-created)
+const getStrategyConfig = (strategyId, displayName = "", index = 0) => {
+  // Check if it's a default model
+  if (DEFAULT_MODEL_CONFIG[strategyId]) {
+    return DEFAULT_MODEL_CONFIG[strategyId];
+  }
+  
+  // For user-created strategies, assign colors based on index
+  const colorConfig = USER_STRATEGY_COLORS[index % USER_STRATEGY_COLORS.length];
+  return {
+    name: displayName || strategyId,
+    subtitle: "Custom Strategy",
+    icon: Activity,
+    ...colorConfig
+  };
+};
+
+// Base model options for creating new strategies
+const BASE_MODEL_OPTIONS = [
+  { id: "model_a", name: "Model A - Disciplined Edge Trader", description: "Higher edge threshold, moderate sizing, controlled churn" },
+  { id: "model_b", name: "Model B - High Frequency Hunter", description: "Lower threshold, aggressive entries, faster exits" },
+  { id: "model_c", name: "Model C - Institutional Risk-First", description: "Premium quality signals, conservative sizing" },
+  { id: "model_d", name: "Model D - Growth Focused Trader", description: "Balanced approach with growth focus" },
+  { id: "model_e", name: "Model E - Balanced Edge Hunter", description: "Equilibrium between all parameters" },
+];
+
 // Format currency
 const formatCurrency = (value) => {
   const num = Number(value) || 0;
@@ -86,8 +135,8 @@ const formatPct = (value) => {
 };
 
 // Strategy Summary Card
-const StrategySummaryCard = ({ strategyId, data, isWinning, isBestRiskAdjusted, ruleChips }) => {
-  const config = MODEL_CONFIG[strategyId] || { name: strategyId, color: "gray", icon: Activity };
+const StrategySummaryCard = ({ strategyId, data, isWinning, isBestRiskAdjusted, ruleChips, index, onClone, onEdit, isUserCreated }) => {
+  const config = getStrategyConfig(strategyId, data?.display_name, index);
   const Icon = config.icon;
   const portfolio = data?.portfolio || {};
   
@@ -104,17 +153,24 @@ const StrategySummaryCard = ({ strategyId, data, isWinning, isBestRiskAdjusted, 
           <div className="flex items-center gap-2">
             <Icon className={`w-5 h-5 ${config.textClass}`} />
             <CardTitle className="text-lg font-bold">
-              {config.name}
+              {data?.display_name || config.name}
               {isWinning && <Crown className="inline w-4 h-4 ml-2 text-yellow-400" />}
               {isBestRiskAdjusted && !isWinning && <Medal className="inline w-4 h-4 ml-2 text-amber-400" />}
             </CardTitle>
           </div>
-          <Badge 
-            variant={data?.enabled ? "default" : "secondary"}
-            className={data?.enabled ? "bg-green-500" : ""}
-          >
-            {data?.enabled ? "Active" : "Inactive"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {isUserCreated && (
+              <Badge variant="outline" className="text-[10px] border-cyan-500/50 text-cyan-400">
+                Custom
+              </Badge>
+            )}
+            <Badge 
+              variant={data?.enabled ? "default" : "secondary"}
+              className={data?.enabled ? "bg-green-500" : ""}
+            >
+              {data?.enabled ? "Active" : "Inactive"}
+            </Badge>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">{config.subtitle}</p>
       </CardHeader>
@@ -164,13 +220,25 @@ const StrategySummaryCard = ({ strategyId, data, isWinning, isBestRiskAdjusted, 
           <RuleChips chips={ruleChips} maxDisplay={7} />
         )}
         
-        {/* View Rules Button */}
+        {/* Action Buttons */}
         <div className="mt-3 flex items-center justify-between">
-          <RulesDrawer 
-            strategyId={strategyId} 
-            displayName={`${config.name} - ${config.subtitle}`}
-            league="BASE"
-          />
+          <div className="flex items-center gap-1">
+            <RulesDrawer 
+              strategyId={strategyId} 
+              displayName={`${data?.display_name || config.name} - ${config.subtitle}`}
+              league="BASE"
+            />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-xs"
+              onClick={() => onClone && onClone(strategyId, data)}
+              data-testid={`clone-strategy-${strategyId}`}
+            >
+              <Copy className="w-3 h-3 mr-1" />
+              Clone
+            </Button>
+          </div>
           <Link to="/optimization">
             <Button variant="ghost" size="sm" className="text-xs">
               <Settings className="w-3 h-3 mr-1" />
@@ -220,11 +288,11 @@ const ComparisonTable = ({ comparison, strategies }) => {
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-3 text-muted-foreground">Metric</th>
-                {strategyIds.map(sid => {
-                  const config = MODEL_CONFIG[sid] || { name: sid };
+                {strategyIds.map((sid, idx) => {
+                  const config = getStrategyConfig(sid, strategies[sid]?.display_name, idx);
                   return (
-                    <th key={sid} className={`text-center py-2 px-3 ${MODEL_CONFIG[sid]?.textClass || ''}`}>
-                      {config.name}
+                    <th key={sid} className={`text-center py-2 px-3 ${config.textClass || ''}`}>
+                      {strategies[sid]?.display_name || config.name}
                     </th>
                   );
                 })}
@@ -253,8 +321,9 @@ const ComparisonTable = ({ comparison, strategies }) => {
 };
 
 // Game Positions Table
-const GamePositionsTable = ({ gamePositions }) => {
+const GamePositionsTable = ({ gamePositions, strategies }) => {
   const games = Object.entries(gamePositions || {});
+  const strategyIds = Object.keys(strategies || {});
   
   if (games.length === 0) {
     return (
@@ -286,11 +355,11 @@ const GamePositionsTable = ({ gamePositions }) => {
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-3 text-muted-foreground">Game</th>
-                {Object.keys(MODEL_CONFIG).map(sid => {
-                  const config = MODEL_CONFIG[sid];
+                {strategyIds.map((sid, idx) => {
+                  const config = getStrategyConfig(sid, strategies[sid]?.display_name, idx);
                   return (
                     <th key={sid} className={`text-center py-2 px-3 ${config.textClass}`}>
-                      {config.name}
+                      {strategies[sid]?.display_name || config.name}
                     </th>
                   );
                 })}
@@ -300,7 +369,7 @@ const GamePositionsTable = ({ gamePositions }) => {
               {games.map(([gameId, positions]) => (
                 <tr key={gameId} className="border-b border-border/50 hover:bg-muted/30">
                   <td className="py-2 px-3 font-mono text-xs">{gameId.substring(0, 20)}...</td>
-                  {Object.keys(MODEL_CONFIG).map(sid => {
+                  {strategyIds.map(sid => {
                     const pos = positions[sid];
                     if (!pos?.has_position) {
                       return <td key={sid} className="text-center py-2 px-3 text-muted-foreground">-</td>;
@@ -333,10 +402,35 @@ export default function StrategyCommandCenter() {
   const [summary, setSummary] = useState(null);
   const [gamePositions, setGamePositions] = useState({});
   const [rulesData, setRulesData] = useState({});
+  const [userStrategies, setUserStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isStale, setIsStale] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Create/Clone Strategy Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createMode, setCreateMode] = useState('create'); // 'create' or 'clone'
+  const [cloneSource, setCloneSource] = useState(null);
+  const [newStrategyName, setNewStrategyName] = useState('');
+  const [newStrategyKey, setNewStrategyKey] = useState('');
+  const [newStrategyDescription, setNewStrategyDescription] = useState('');
+  const [selectedBaseModel, setSelectedBaseModel] = useState('model_a');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState(null);
+  
+  // Fetch user strategies from DB
+  const fetchUserStrategies = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/user-strategies?include_disabled=true`);
+      if (res.ok) {
+        const data = await res.json();
+        setUserStrategies(data.strategies || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch user strategies:", e);
+    }
+  }, []);
   
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -411,9 +505,10 @@ export default function StrategyCommandCenter() {
   // Initial fetch and polling
   useEffect(() => {
     fetchData();
+    fetchUserStrategies();
     const interval = setInterval(fetchData, 5000); // Update every 5 seconds (reduced from 2)
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, fetchUserStrategies]);
   
   // Stale detection
   useEffect(() => {
@@ -494,6 +589,107 @@ export default function StrategyCommandCenter() {
     }
   };
   
+  // Open create strategy modal
+  const openCreateModal = () => {
+    setCreateMode('create');
+    setCloneSource(null);
+    setNewStrategyName('');
+    setNewStrategyKey('');
+    setNewStrategyDescription('');
+    setSelectedBaseModel('model_a');
+    setCreateError(null);
+    setShowCreateModal(true);
+  };
+  
+  // Open clone strategy modal
+  const openCloneModal = (strategyId, strategyData) => {
+    setCreateMode('clone');
+    setCloneSource({ id: strategyId, data: strategyData });
+    setNewStrategyName(`${strategyData?.display_name || strategyId} (Copy)`);
+    setNewStrategyKey(`${strategyId}_copy_${Date.now()}`);
+    setNewStrategyDescription(`Cloned from ${strategyData?.display_name || strategyId}`);
+    setCreateError(null);
+    setShowCreateModal(true);
+  };
+  
+  // Generate key from name
+  const generateKey = (name) => {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  };
+  
+  // Handle name change (auto-generate key)
+  const handleNameChange = (name) => {
+    setNewStrategyName(name);
+    if (createMode === 'create') {
+      setNewStrategyKey(generateKey(name));
+    }
+  };
+  
+  // Create or clone strategy
+  const handleCreateStrategy = async () => {
+    if (!newStrategyName.trim() || !newStrategyKey.trim()) {
+      setCreateError('Name and key are required');
+      return;
+    }
+    
+    setCreateLoading(true);
+    setCreateError(null);
+    
+    try {
+      if (createMode === 'clone' && cloneSource) {
+        // Clone existing strategy
+        const res = await fetch(`${API_BASE}/api/user-strategies/${cloneSource.id}/clone`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_strategy_key: newStrategyKey,
+            new_display_name: newStrategyName,
+            description: newStrategyDescription
+          })
+        });
+        
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to clone strategy');
+        }
+      } else {
+        // Create new strategy
+        const res = await fetch(`${API_BASE}/api/user-strategies`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy_key: newStrategyKey,
+            base_model: selectedBaseModel,
+            display_name: newStrategyName,
+            description: newStrategyDescription,
+            enabled: true,
+            config_overrides: {}
+          })
+        });
+        
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to create strategy');
+        }
+      }
+      
+      // Success - refresh data
+      setShowCreateModal(false);
+      fetchData();
+      fetchUserStrategies();
+    } catch (err) {
+      setCreateError(err.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+  
+  // Check if a strategy is user-created
+  const isUserCreated = (strategyId) => {
+    const defaultIds = ['model_a_disciplined', 'model_b_high_frequency', 'model_c_institutional', 'model_d_growth_focused', 'model_e_balanced_hunter'];
+    return !defaultIds.includes(strategyId);
+  };
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -524,6 +720,16 @@ export default function StrategyCommandCenter() {
             
             {/* Status Indicators */}
             <div className="flex items-center gap-4">
+              {/* Create Strategy Button */}
+              <Button 
+                onClick={openCreateModal}
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600"
+                data-testid="create-strategy-btn"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Create Strategy
+              </Button>
+              
               {/* Last Updated */}
               <div className={`text-xs ${isStale ? 'text-red-400' : 'text-muted-foreground'}`}>
                 Last updated: {lastUpdate ? `${Math.round((new Date() - lastUpdate) / 1000)}s ago` : '-'}
@@ -623,7 +829,7 @@ export default function StrategyCommandCenter() {
         
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(strategies).map(([sid, data]) => (
+          {Object.entries(strategies).map(([sid, data], index) => (
             <StrategySummaryCard
               key={sid}
               strategyId={sid}
@@ -631,6 +837,9 @@ export default function StrategyCommandCenter() {
               isWinning={sid === winningModel}
               isBestRiskAdjusted={sid === bestRiskAdjusted}
               ruleChips={rulesData[sid]?.rule_chips}
+              index={index}
+              onClone={openCloneModal}
+              isUserCreated={isUserCreated(sid)}
             />
           ))}
         </div>
@@ -639,7 +848,7 @@ export default function StrategyCommandCenter() {
         <ComparisonTable comparison={summary?.comparison} strategies={strategies} />
         
         {/* Game Positions */}
-        <GamePositionsTable gamePositions={gamePositions} />
+        <GamePositionsTable gamePositions={gamePositions} strategies={strategies} />
         
         {/* Detailed Model Rules & Configuration */}
         <Card>
@@ -784,8 +993,8 @@ export default function StrategyCommandCenter() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {Object.keys(strategies).map(sid => {
-                const config = MODEL_CONFIG[sid] || { name: sid };
+              {Object.entries(strategies).map(([sid, data], index) => {
+                const config = getStrategyConfig(sid, data?.display_name, index);
                 return (
                   <Button
                     key={sid}
@@ -794,7 +1003,7 @@ export default function StrategyCommandCenter() {
                     onClick={() => resetStrategy(sid)}
                     className="text-xs"
                   >
-                    Reset {config.name}
+                    Reset {data?.display_name || config.name}
                   </Button>
                 );
               })}
@@ -818,6 +1027,127 @@ export default function StrategyCommandCenter() {
           </div>
         )}
       </main>
+      
+      {/* Create/Clone Strategy Modal */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent className="sm:max-w-[500px] bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {createMode === 'clone' ? (
+                <>
+                  <Copy className="w-5 h-5 text-cyan-400" />
+                  Clone Strategy
+                </>
+              ) : (
+                <>
+                  <Plus className="w-5 h-5 text-cyan-400" />
+                  Create New Strategy
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {createMode === 'clone' 
+                ? `Create a copy of "${cloneSource?.data?.display_name}" with custom parameters.`
+                : "Create a new strategy based on a base model template."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Base Model Selection (only for create mode) */}
+            {createMode === 'create' && (
+              <div className="space-y-2">
+                <Label htmlFor="base-model">Base Model</Label>
+                <Select value={selectedBaseModel} onValueChange={setSelectedBaseModel}>
+                  <SelectTrigger id="base-model" data-testid="base-model-select">
+                    <SelectValue placeholder="Select base model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BASE_MODEL_OPTIONS.map(model => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{model.name}</span>
+                          <span className="text-xs text-muted-foreground">{model.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Strategy Name */}
+            <div className="space-y-2">
+              <Label htmlFor="strategy-name">Strategy Name</Label>
+              <Input
+                id="strategy-name"
+                value={newStrategyName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="e.g., Sharp Edge Hunter"
+                data-testid="strategy-name-input"
+              />
+            </div>
+            
+            {/* Strategy Key (auto-generated) */}
+            <div className="space-y-2">
+              <Label htmlFor="strategy-key">Strategy Key (unique identifier)</Label>
+              <Input
+                id="strategy-key"
+                value={newStrategyKey}
+                onChange={(e) => setNewStrategyKey(e.target.value)}
+                placeholder="e.g., sharp_edge_hunter"
+                className="font-mono text-sm"
+                data-testid="strategy-key-input"
+              />
+              <p className="text-xs text-muted-foreground">
+                Lowercase letters, numbers, and underscores only
+              </p>
+            </div>
+            
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="strategy-desc">Description</Label>
+              <Input
+                id="strategy-desc"
+                value={newStrategyDescription}
+                onChange={(e) => setNewStrategyDescription(e.target.value)}
+                placeholder="Optional description..."
+                data-testid="strategy-description-input"
+              />
+            </div>
+            
+            {/* Error Message */}
+            {createError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                <p className="text-sm text-red-400">{createError}</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateStrategy}
+              disabled={createLoading}
+              className="bg-gradient-to-r from-cyan-500 to-blue-500"
+              data-testid="create-strategy-submit"
+            >
+              {createLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  {createMode === 'clone' ? 'Cloning...' : 'Creating...'}
+                </>
+              ) : (
+                <>
+                  {createMode === 'clone' ? 'Clone Strategy' : 'Create Strategy'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

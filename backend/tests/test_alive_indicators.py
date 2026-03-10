@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import json
 
 # Get API URL from environment or use default
-API_BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://portfolio-unified.preview.emergentagent.com")
+API_BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://predict-strategy-hub.preview.emergentagent.com")
 
 
 @pytest.fixture

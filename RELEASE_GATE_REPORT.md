@@ -42,7 +42,7 @@
 | **Previous Issue** | CORS was set to `["*"]` allowing all origins. |
 | **Fix Applied** | Updated `config.py` to use `CORS_ORIGINS` env variable with comma-separated allowlist. |
 | **New Behavior** | Only origins in `CORS_ORIGINS` env variable are allowed. Unknown origins rejected. |
-| **Verification** | Backend logs show: `CORS origins configured: ['https://portfolio-unified.preview.emergentagent.com', 'http://localhost:3000']` |
+| **Verification** | Backend logs show: `CORS origins configured: ['https://predict-strategy-hub.preview.emergentagent.com', 'http://localhost:3000']` |
 
 ---
 

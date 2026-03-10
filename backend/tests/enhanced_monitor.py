@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 import httpx
 
-API_BASE = os.environ.get('API_BASE', 'https://portfolio-unified.preview.emergentagent.com')
+API_BASE = os.environ.get('API_BASE', 'https://predict-strategy-hub.preview.emergentagent.com')
 LOG_FILE = "/app/test_reports/soak_test_output.log"
 REPORT_FILE = "/app/test_reports/sandbox_release_gate_report.json"
 CHECKPOINT_FILE = "/app/test_reports/soak_checkpoints.json"

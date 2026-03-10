@@ -25,7 +25,7 @@ import httpx
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-API_BASE = os.environ.get('API_BASE', 'https://portfolio-unified.preview.emergentagent.com')
+API_BASE = os.environ.get('API_BASE', 'https://predict-strategy-hub.preview.emergentagent.com')
 
 
 class FailureScenarioTests:

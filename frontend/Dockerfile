@@ -4,14 +4,14 @@ FROM public.ecr.aws/docker/library/node:20-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
-COPY yarn.lock ./
-RUN yarn install --frozen-lockfile
+COPY package-lock.json ./
+RUN npm install
 
 ARG REACT_APP_BACKEND_URL
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
 COPY . .
-RUN yarn build
+RUN npm run build
 
 # Stage 2 - Serve with nginx
 FROM public.ecr.aws/docker/library/nginx:alpine

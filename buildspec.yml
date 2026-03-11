@@ -1,15 +1,5 @@
 version: 0.2
 
-# ─────────────────────────────────────────────────────────────
-# Set these variables in CodeBuild Environment Variables:
-#
-#   AWS_DEFAULT_REGION        = ap-south-1
-#   AWS_ACCOUNT_ID            = 123456789012
-#   IMAGE_REPO_NAME           = predictpod-backend
-#   FRONTEND_IMAGE_REPO_NAME  = predictpod-frontend
-#   REACT_APP_BACKEND_URL     = https://your-api-url
-# ─────────────────────────────────────────────────────────────
-
 phases:
   pre_build:
     commands:
@@ -20,32 +10,23 @@ phases:
       - IMAGE_TAG=latest
       - echo Backend URI is $BACKEND_REPO_URI
       - echo Frontend URI is $FRONTEND_REPO_URI
-
   build:
     commands:
       - echo Build started on `date`
-
-      - echo Building the Backend Docker image...
+      - echo Building Backend Docker image...
       - docker build -t $BACKEND_REPO_URI:$IMAGE_TAG -f backend/Dockerfile backend/
-
-      - echo Building the Frontend Docker image...
+      - echo Building Frontend Docker image...
       - docker build -t $FRONTEND_REPO_URI:$IMAGE_TAG -f frontend/Dockerfile --build-arg REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL frontend/
-
   post_build:
     commands:
       - echo Build completed on `date`
-
-      - echo Pushing Backend image to ECR...
+      - echo Pushing Backend image...
       - docker push $BACKEND_REPO_URI:$IMAGE_TAG
-
-      - echo Pushing Frontend image to ECR...
+      - echo Pushing Frontend image...
       - docker push $FRONTEND_REPO_URI:$IMAGE_TAG
-
       - echo Writing imagedefinitions.json...
       - printf '[{"name":"pp3container","imageUri":"%s"},{"name":"frontend","imageUri":"%s"}]' $BACKEND_REPO_URI:$IMAGE_TAG $FRONTEND_REPO_URI:$IMAGE_TAG > imagedefinitions.json
-      - echo imagedefinitions.json contents:
       - cat imagedefinitions.json
-
 artifacts:
   files:
     - imagedefinitions.json

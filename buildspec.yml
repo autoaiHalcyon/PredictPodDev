@@ -25,8 +25,9 @@ phases:
       - echo Pushing Frontend image...
       - docker push $FRONTEND_REPO_URI:$IMAGE_TAG
       - echo Writing imagedefinitions.json...
-      - printf '[{"name":"pp3container","imageUri":"%s"},{"name":"frontend","imageUri":"%s"}]' $BACKEND_REPO_URI:$IMAGE_TAG $FRONTEND_REPO_URI:$IMAGE_TAG > imagedefinitions.json
+      - printf '[{"name":"ppcontainer","imageUri":"%s"},{"name":"frontend","imageUri":"%s"}]' $BACKEND_REPO_URI:$IMAGE_TAG $FRONTEND_REPO_URI:$IMAGE_TAG > imagedefinitions.json
       - cat imagedefinitions.json
 artifacts:
   files:
     - imagedefinitions.json
+

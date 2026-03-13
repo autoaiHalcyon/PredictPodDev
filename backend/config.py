@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
     
     # Database
-    mongo_url: str = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+    mongo_url: str = os.environ.get('MONGO_URL', 'mongodb+srv://HalMan_db_user:Halcyon%4012$@cluster0.ifvwnf.mongodb.net')
     db_name: str = os.environ.get('DB_NAME', 'predictpod')
     
     # CORS Configuration - env-based allowlist
